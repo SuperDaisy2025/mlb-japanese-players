@@ -99,7 +99,8 @@ function periodDates(period) {
   const now = new Date();
   if (period === '1w') { const s=new Date(now); s.setDate(s.getDate()-7); return {start:dateStr(s),end:dateStr(now)}; }
   if (period === '1m') { const s=new Date(now); s.setMonth(s.getMonth()-1); return {start:dateStr(s),end:dateStr(now)}; }
-  return { start:`${now.getFullYear()}-03-01`, end:dateStr(now) };
+  // Season: always start from Opening Day 3/26
+  return { start:`${now.getFullYear()}-03-26`, end:dateStr(now) };
 }
 
 async function loadStatcastData(playerId, type='batter') {

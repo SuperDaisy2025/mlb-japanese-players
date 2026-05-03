@@ -125,7 +125,6 @@ async function renderBattingCharts() {
     const { start, end } = periodDates(currentPeriod);
 
     const makeDataset = async (p, statKey, group, cumulative) => {
-      // Always fetch full season
       const games = await fetchGameLog(p.id, group);
       let cum = 0;
       const allData = games.map(g => {
@@ -133,11 +132,7 @@ async function renderBattingCharts() {
         if (cumulative) { cum += v; return { x: g.date, y: cum }; }
         return { x: g.date, y: v };
       });
-      // Cumulative: always show full season so you can see the true total
-      // AVG/OPS/ERA: filter to period
-      if (cumulative) {
-        return { label: currentLang==='ja'?p.nameJa:p.nameEn, data: allData, isHighlight: p.id===660271 };
-      }
+      // All charts: filter by period X axis
       const filtered = allData.filter(d => d.x >= start && d.x <= end);
       return { label: currentLang==='ja'?p.nameJa:p.nameEn, data: filtered, isHighlight: p.id===660271 };
     };
@@ -163,9 +158,9 @@ async function renderBattingCharts() {
         <div class="chart-wrap"><canvas id="chart-ops"></canvas></div>
       </div>
     `;
-    renderLineChart('chart-hr',  hrSets.filter(d=>d.data.length),  {yLabel:'Cumulative HR'});
-    renderLineChart('chart-avg', avgSets.filter(d=>d.data.length), {yLabel:'Batting Avg', xMin: start, xMax: end});
-    renderLineChart('chart-ops', opsSets.filter(d=>d.data.length), {yLabel:'OPS', xMin: start, xMax: end});
+    renderLineChart('chart-hr',  hrSets.filter(d=>d.data.length),  {yLabel:'Cumulative HR', xMin: start, xMax: end});
+    renderLineChart('chart-avg', avgSets.filter(d=>d.data.length), {yLabel:'Batting Avg',   xMin: start, xMax: end});
+    renderLineChart('chart-ops', opsSets.filter(d=>d.data.length), {yLabel:'OPS',           xMin: start, xMax: end});
   } catch(e) {
     section.innerHTML = `<div class="error-msg">${t('error')}: ${e.message}</div>`;
   }
@@ -231,9 +226,7 @@ async function renderPitchingCharts() {
         if (cumulative) { cum += v; return { x: g.date, y: cum }; }
         return { x: g.date, y: v };
       });
-      if (cumulative) {
-        return { label: currentLang==='ja'?p.nameJa:p.nameEn, data: allData, isHighlight: p.id===660271 };
-      }
+      // All charts: filter by period
       const filtered = allData.filter(d => d.x >= start && d.x <= end);
       return { label: currentLang==='ja'?p.nameJa:p.nameEn, data: filtered, isHighlight: p.id===660271 };
     };
@@ -251,17 +244,17 @@ async function renderPitchingCharts() {
         <div class="chart-wrap"><canvas id="chart-era"></canvas></div>
       </div>
       <div class="chart-block">
-        <h3 class="chart-title">${t('wins')} <span class="chart-badge">${t('cumulative')}</span></h3>
+        <h3 class="chart-title">${t('wins')} <span class="chart-badge">${t('cumulative')} · ${periodLabel}</span></h3>
         <div class="chart-wrap"><canvas id="chart-wins"></canvas></div>
       </div>
       <div class="chart-block">
-        <h3 class="chart-title">${t('strikeouts')} <span class="chart-badge">${t('cumulative')}</span></h3>
+        <h3 class="chart-title">${t('strikeouts')} <span class="chart-badge">${t('cumulative')} · ${periodLabel}</span></h3>
         <div class="chart-wrap"><canvas id="chart-k"></canvas></div>
       </div>
     `;
-    renderLineChart('chart-era',  eraSets.filter(d=>d.data.length),  {yLabel:'ERA', xMin: start, xMax: end});
-    renderLineChart('chart-wins', winSets.filter(d=>d.data.length),  {yLabel:'Wins'});
-    renderLineChart('chart-k',    kSets.filter(d=>d.data.length),    {yLabel:'Strikeouts'});
+    renderLineChart('chart-era',  eraSets.filter(d=>d.data.length),  {yLabel:'ERA',         xMin: start, xMax: end});
+    renderLineChart('chart-wins', winSets.filter(d=>d.data.length),  {yLabel:'Wins',        xMin: start, xMax: end});
+    renderLineChart('chart-k',    kSets.filter(d=>d.data.length),    {yLabel:'Strikeouts',  xMin: start, xMax: end});
   } catch(e) {
     section.innerHTML = `<div class="error-msg">${t('error')}: ${e.message}</div>`;
   }
@@ -322,8 +315,8 @@ async function renderPlayerDetail(player) {
       </div>
       <div class="player-subtabs">
         <button class="subtab-btn active" id="stab-summary" onclick="switchPlayerTab('summary')">${t('playerSummary')}</button>
-        ${player.isBatter?`<button class="subtab-btn" id="stab-batting-log" onclick="switchPlayerTab('batting-log')">${t('asBatter')}</button>`:''}
-        ${player.isPitcher?`<button class="subtab-btn" id="stab-pitching-log" onclick="switchPlayerTab('pitching-log')">${t('asPitcher')}</button>`:''}
+        ${player.isBatter?`<button class="subtab-btn" id="stab-batting-log" onclick="switchPlayerTab('batting-log')">打席詳細</button>`:''}
+        ${player.isPitcher?`<button class="subtab-btn" id="stab-pitching-log" onclick="switchPlayerTab('pitching-log')">投球詳細</button>`:''}
       </div>
       <div id="player-subtab-content"><div class="loading-spinner"></div></div>
     </div>
@@ -398,8 +391,7 @@ async function renderPlayerSummary(container) {
         ${sc.zone_pct?sr('Zone%', sc.zone_pct+'%'):''}
       </div>`;
     } else {
-      html += `<p class="statcast-note">${t('gbNote')}</p>
-        <button class="btn-secondary" onclick="triggerGithubActions()">🔄 ${t('gbTrigger')}</button>`;
+      html += `<p class="statcast-note">${currentLang==='ja'?'右上の「Statcast更新」ボタンでデータを取得できます。':'Use the "Statcast" button in the top right to fetch data.'}</p>`;
     }
     html += `</div>`;
 
@@ -471,10 +463,10 @@ async function renderBattingLog(container) {
           <span class="gl-stat">${s.rbi??0}RBI</span>
           <span class="gl-avg">AVG ${s.avg??'.000'}</span>
           <span class="gl-ops">OPS ${s.ops??'-'}</span>
+          <span class="gl-ab-inline">${abResultsInline}</span>
           <span class="gl-arrow">▶</span>
         </div>
-        <div class="gl-ab-results">${abResultsInline}</div>
-        <div class="game-atbats" id="atbats-${gamePk}" data-ishome="${isHome}" style="display:none" data-plays='${JSON.stringify(myPlays.map(p=>({
+        <div class="game-atbats" id="atbats-${gamePk}" style="display:none" data-plays='${JSON.stringify(myPlays.map(p=>({
           event: p.result?.event,
           pitcher: p.matchup?.pitcher?.fullName,
           pitches: (p.playEvents?.filter(e=>e.isPitch)||[]).map(pitch=>({
@@ -486,7 +478,7 @@ async function renderBattingLog(container) {
             pX: pitch.pitchData?.coordinates?.pX,
             pZ: pitch.pitchData?.coordinates?.pZ,
           }))
-        })))}'></div>
+        }))).replace(/'/g,"&#39;")}'></div>
       `;
     }
     html += `</div>`;
@@ -505,8 +497,12 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
   el.style.display='block';
   if(icon) icon.textContent='▼';
 
-  // Data already embedded in data-plays attribute
-  const myPlays = JSON.parse(el.dataset.plays || '[]');
+  // Data embedded in data-plays attribute
+  let myPlays = [];
+  try {
+    myPlays = JSON.parse(el.getAttribute('data-plays') || '[]');
+  } catch(e) { myPlays = []; }
+
   if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
   let html = `<div class="ab-summary-list">`;
@@ -804,23 +800,74 @@ function updateLastUpdatedDisplay() {
   }
 }
 
+// ── Statcast / GitHub Actions trigger ────────────────────────────────────────
 async function triggerGithubActions() {
-  let token = localStorage.getItem('gh_token');
-  let repo  = localStorage.getItem('gh_repo');
-  if (!token||!repo) {
-    const v = prompt('GitHub Token と リポジトリ名を入力\n形式: TOKEN|owner/repo');
-    if (!v) return;
-    const [t2,r] = v.split('|');
-    localStorage.setItem('gh_token', t2.trim());
-    localStorage.setItem('gh_repo', r.trim());
-    token=t2.trim(); repo=r.trim();
+  const token = localStorage.getItem('gh_token');
+  const repo  = localStorage.getItem('gh_repo');
+
+  if (!token || !repo) {
+    openGhSettings();
+    return;
   }
+
+  const btn = document.getElementById('statcast-btn');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Running...'; }
+
   try {
     const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/fetch_statcast.yml/dispatches`,{
       method:'POST',
       headers:{'Authorization':`token ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({ref:'main'})
     });
-    alert(res.ok?(currentLang==='ja'?'GitHub Actions開始！約2分後に更新されます。':'GitHub Actions triggered! Updates in ~2 min.'):'Error: '+res.status);
-  } catch(e) { alert('Failed: '+e.message); }
+    if (res.ok) {
+      if (btn) { btn.textContent='✅ Started!'; setTimeout(()=>{ if(btn){btn.disabled=false;btn.textContent='📡 Statcast';} }, 3000); }
+    } else {
+      alert('Error: '+res.status+' — Check token/repo in ⚙ settings');
+      if (btn) { btn.disabled=false; btn.textContent='📡 Statcast'; }
+    }
+  } catch(e) {
+    alert('Failed: '+e.message);
+    if (btn) { btn.disabled=false; btn.textContent='📡 Statcast'; }
+  }
+}
+
+function openGhSettings() {
+  // Remove existing modal if any
+  document.getElementById('gh-modal')?.remove();
+
+  const token = localStorage.getItem('gh_token') || '';
+  const repo  = localStorage.getItem('gh_repo')  || 'SuperDaisy2025/mlb-japanese-players';
+
+  const modal = document.createElement('div');
+  modal.id = 'gh-modal';
+  modal.innerHTML = `
+    <div class="modal-overlay" onclick="document.getElementById('gh-modal').remove()"></div>
+    <div class="modal-box">
+      <div class="modal-title">⚙ Statcast設定 / GitHub Actions</div>
+      <div class="modal-field">
+        <label>Repository (owner/repo)</label>
+        <input id="gh-repo-input" type="text" value="${repo}" placeholder="SuperDaisy2025/mlb-japanese-players">
+      </div>
+      <div class="modal-field">
+        <label>GitHub Personal Access Token</label>
+        <input id="gh-token-input" type="password" value="${token}" placeholder="ghp_...">
+        <div class="modal-hint">Settings → Developer settings → Personal access tokens → workflow scope</div>
+      </div>
+      <div class="modal-actions">
+        <button onclick="saveGhSettings()" class="btn-primary">保存して実行 / Save & Run</button>
+        <button onclick="document.getElementById('gh-modal').remove()" class="btn-cancel">キャンセル</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function saveGhSettings() {
+  const token = document.getElementById('gh-token-input').value.trim();
+  const repo  = document.getElementById('gh-repo-input').value.trim();
+  if (!token || !repo) { alert('Token と Repository を入力してください'); return; }
+  localStorage.setItem('gh_token', token);
+  localStorage.setItem('gh_repo', repo);
+  document.getElementById('gh-modal')?.remove();
+  triggerGithubActions();
 }
