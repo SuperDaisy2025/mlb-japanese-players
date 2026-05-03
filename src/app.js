@@ -164,8 +164,8 @@ async function renderBattingCharts() {
       </div>
     `;
     renderLineChart('chart-hr',  hrSets.filter(d=>d.data.length),  {yLabel:'Cumulative HR'});
-    renderLineChart('chart-avg', avgSets.filter(d=>d.data.length), {yLabel:'Batting Avg'});
-    renderLineChart('chart-ops', opsSets.filter(d=>d.data.length), {yLabel:'OPS'});
+    renderLineChart('chart-avg', avgSets.filter(d=>d.data.length), {yLabel:'Batting Avg', xMin: start, xMax: end});
+    renderLineChart('chart-ops', opsSets.filter(d=>d.data.length), {yLabel:'OPS', xMin: start, xMax: end});
   } catch(e) {
     section.innerHTML = `<div class="error-msg">${t('error')}: ${e.message}</div>`;
   }
@@ -259,7 +259,7 @@ async function renderPitchingCharts() {
         <div class="chart-wrap"><canvas id="chart-k"></canvas></div>
       </div>
     `;
-    renderLineChart('chart-era',  eraSets.filter(d=>d.data.length),  {yLabel:'ERA'});
+    renderLineChart('chart-era',  eraSets.filter(d=>d.data.length),  {yLabel:'ERA', xMin: start, xMax: end});
     renderLineChart('chart-wins', winSets.filter(d=>d.data.length),  {yLabel:'Wins'});
     renderLineChart('chart-k',    kSets.filter(d=>d.data.length),    {yLabel:'Strikeouts'});
   } catch(e) {
@@ -420,19 +420,52 @@ async function renderBattingLog(container) {
     const games = (await fetchGameLog(currentPlayer.id,'hitting')).reverse();
     if (!games.length) { container.innerHTML=`<div class="no-data">${t('noData')}</div>`; return; }
 
+    container.innerHTML = `<div class="loading-spinner"></div>`;
+
+    // Fetch linescore + play-by-play for each game in parallel (limited to 20)
+    const recent = games.slice(0, 20);
+    const gameDetails = await Promise.all(recent.map(async game => {
+      const gamePk = game.game?.gamePk;
+      if (!gamePk) return { game, linescore: null, plays: [] };
+      try {
+        const [linescore, plays] = await Promise.all([
+          fetchGameLinescore(gamePk),
+          fetchGamePlayByPlay(gamePk),
+        ]);
+        return { game, linescore, plays };
+      } catch { return { game, linescore: null, plays: [] }; }
+    }));
+
     let html = `<div class="game-log">`;
-    for (const game of games.slice(0,40)) {
+    for (const { game, linescore, plays } of gameDetails) {
       const s = game.stat;
       const gamePk = game.game?.gamePk;
       const opp = game.opponent?.name || game.team?.name || '?';
       const isHome = game.isHome;
-      // Team score from game stat (not always available in gameLog, we'll fetch on expand)
+
+      // Score
+      let scoreHtml = '<span class="gl-score-nd">-</span>';
+      if (linescore?.teams) {
+        const awayR = linescore.teams.away?.runs;
+        const homeR = linescore.teams.home?.runs;
+        if (awayR !== undefined && homeR !== undefined) {
+          const myR  = isHome ? homeR : awayR;
+          const oppR = isHome ? awayR : homeR;
+          const wl   = myR > oppR ? 'W' : myR < oppR ? 'L' : 'T';
+          scoreHtml = `<span class="gl-wl ${wl==='W'?'win':wl==='L'?'loss':''}">${wl}${myR}-${oppR}</span>`;
+        }
+      }
+
+      // At-bat results inline
+      const myPlays = plays.filter(p => p.matchup?.batter?.id === currentPlayer.id);
+      const abResultsInline = myPlays.map(p => shortResult(p.result?.event)).join(' ');
+
       html += `
-        <div class="game-log-row" onclick="toggleGameAtBats('${gamePk}',this,'${opp.replace(/'/g,"\\'")}',${isHome})">
+        <div class="game-log-row" onclick="toggleGameAtBats('${gamePk}',this,${isHome})">
           <span class="gl-date">${game.date?.slice(5)||''}</span>
           <span class="gl-ha">${isHome?'🏠':'✈'}</span>
           <span class="gl-opp">${opp}</span>
-          <span class="gl-score-placeholder" id="score-${gamePk}">-</span>
+          <span class="gl-score">${scoreHtml}</span>
           <span class="gl-stat">${s.hits??0}/${s.atBats??0}</span>
           <span class="gl-stat">${s.homeRuns??0}HR</span>
           <span class="gl-stat">${s.rbi??0}RBI</span>
@@ -440,7 +473,20 @@ async function renderBattingLog(container) {
           <span class="gl-ops">OPS ${s.ops??'-'}</span>
           <span class="gl-arrow">▶</span>
         </div>
-        <div class="game-atbats" id="atbats-${gamePk}" style="display:none"></div>
+        <div class="gl-ab-results">${abResultsInline}</div>
+        <div class="game-atbats" id="atbats-${gamePk}" data-ishome="${isHome}" style="display:none" data-plays='${JSON.stringify(myPlays.map(p=>({
+          event: p.result?.event,
+          pitcher: p.matchup?.pitcher?.fullName,
+          pitches: (p.playEvents?.filter(e=>e.isPitch)||[]).map(pitch=>({
+            type: pitch.details?.type?.description,
+            speed: pitch.pitchData?.startSpeed ? Math.round(pitch.pitchData.startSpeed) : null,
+            desc: pitch.details?.description,
+            balls: pitch.count?.balls??0,
+            strikes: pitch.count?.strikes??0,
+            pX: pitch.pitchData?.coordinates?.pX,
+            pZ: pitch.pitchData?.coordinates?.pZ,
+          }))
+        })))}'></div>
       `;
     }
     html += `</div>`;
@@ -450,7 +496,7 @@ async function renderBattingLog(container) {
   }
 }
 
-async function toggleGameAtBats(gamePk, rowEl, opp, isHome) {
+async function toggleGameAtBats(gamePk, rowEl, isHome) {
   if (!gamePk||gamePk==='undefined') return;
   const el = document.getElementById(`atbats-${gamePk}`);
   if (!el) return;
@@ -458,120 +504,75 @@ async function toggleGameAtBats(gamePk, rowEl, opp, isHome) {
   if (el.style.display==='block') { el.style.display='none'; if(icon) icon.textContent='▶'; return; }
   el.style.display='block';
   if(icon) icon.textContent='▼';
-  el.innerHTML=`<div class="loading-spinner-sm"></div>`;
 
-  try {
-    // Fetch play-by-play and linescore in parallel
-    const [plays, linescore] = await Promise.all([
-      fetchGamePlayByPlay(gamePk),
-      fetchGameLinescore(gamePk),
-    ]);
+  // Data already embedded in data-plays attribute
+  const myPlays = JSON.parse(el.dataset.plays || '[]');
+  if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
-    // Update score in row
-    if (linescore) {
-      const away = linescore.teams?.away;
-      const home = linescore.teams?.home;
-      const scoreEl = document.getElementById(`score-${gamePk}`);
-      if (scoreEl && away && home) {
-        const myRuns  = isHome ? home.runs : away.runs;
-        const oppRuns = isHome ? away.runs : home.runs;
-        const wl = myRuns > oppRuns ? 'W' : myRuns < oppRuns ? 'L' : 'T';
-        scoreEl.innerHTML = `<span class="gl-wl ${wl==='W'?'win':wl==='L'?'loss':''}">${wl}${myRuns}-${oppRuns}</span>`;
-      }
-    }
+  let html = `<div class="ab-summary-list">`;
+  myPlays.forEach((play, idx) => {
+    const result  = shortResult(play.event);
+    const pitcher = play.pitcher || '?';
+    const pitches = play.pitches || [];
+    const last    = pitches[pitches.length-1];
+    const balls   = last?.balls ?? 0;
+    const strikes = last?.strikes ?? 0;
+    const abId    = `ab-${gamePk}-${idx}`;
 
-    const myPlays = plays.filter(p => p.matchup?.batter?.id===currentPlayer.id);
-    if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
-
-    // Build at-bat results summary line
-    const abResults = myPlays.map(p => shortResult(p.result?.event)).join('　');
-
-    let html = `<div class="ab-results-line">${abResults}</div>`;
-    html += `<div class="ab-summary-list">`;
-
-    myPlays.forEach((play, idx) => {
-      const result = shortResult(play.result?.event);
-      const pitcher = play.matchup?.pitcher?.fullName || '?';
-      const pitches = play.playEvents?.filter(e=>e.isPitch)||[];
-      const lastPitch = pitches[pitches.length-1];
-      const balls = lastPitch?.count?.balls??0;
-      const strikes = lastPitch?.count?.strikes??0;
-      const abId = `ab-${gamePk}-${idx}`;
-
-      html += `
-        <div class="ab-summary-row" onclick="toggleAbDetail('${abId}',this)">
-          <span class="ab-idx">${idx+1}</span>
-          <span class="ab-result-badge ${getResultClass(play.result?.event)}">${result}</span>
-          <span class="ab-count">${balls}-${strikes}</span>
-          <span class="ab-pitcher-name">vs ${pitcher}</span>
-          <span class="ab-npitches">${pitches.length}球</span>
-          <span class="ab-arrow">▶</span>
-        </div>
-        <div class="ab-detail-panel" id="${abId}" style="display:none">
-          <div class="ab-detail-inner">
-            <div class="pitch-detail-left">
-              <div class="pitch-table-header">
-                <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span><span>B-S</span><span>${t('outcome')}</span>
+    html += `
+      <div class="ab-summary-row" onclick="toggleAbDetail('${abId}',this)">
+        <span class="ab-idx">${idx+1}</span>
+        <span class="ab-result-badge ${getResultClass(play.event)}">${result}</span>
+        <span class="ab-count">${balls}-${strikes}</span>
+        <span class="ab-pitcher-name">vs ${pitcher}</span>
+        <span class="ab-npitches">${pitches.length}球</span>
+        <span class="ab-arrow">▶</span>
+      </div>
+      <div class="ab-detail-panel" id="${abId}" style="display:none">
+        <div class="ab-detail-inner">
+          <div class="pitch-detail-left">
+            <div class="pitch-table-header">
+              <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span><span>B-S</span><span>${t('outcome')}</span>
+            </div>
+            ${pitches.map((pitch,i)=>`
+              <div class="pitch-row ${i===pitches.length-1?'last-pitch':''}">
+                <span>${i+1}</span>
+                <span>${pitch.type||'-'}</span>
+                <span>${pitch.speed ? pitch.speed+' mph' : '-'}</span>
+                <span>${pitch.balls??0}-${pitch.strikes??0}</span>
+                <span class="pitch-desc">${pitchShort(pitch.desc)}</span>
               </div>
-              ${pitches.map((pitch,i)=>`
-                <div class="pitch-row ${i===pitches.length-1?'last-pitch':''}">
-                  <span>${i+1}</span>
-                  <span>${pitch.details?.type?.description||'-'}</span>
-                  <span>${pitch.pitchData?.startSpeed?Math.round(pitch.pitchData.startSpeed)+' mph':'-'}</span>
-                  <span>${pitch.count?.balls??0}-${pitch.count?.strikes??0}</span>
-                  <span class="pitch-desc">${pitchShort(pitch.details?.description)}</span>
-                </div>
-              `).join('')}
-            </div>
-            <div class="pitch-zone-wrap">
-              <div class="zone-label">Strike Zone</div>
-              ${buildPitchZone(pitches)}
-            </div>
+            `).join('')}
+          </div>
+          <div class="pitch-zone-wrap">
+            <div class="zone-label">Strike Zone</div>
+            ${buildPitchZoneFromData(pitches)}
           </div>
         </div>
-      `;
-    });
-    html += `</div>`;
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML=`<div class="error-msg">${t('error')}</div>`;
-  }
+      </div>
+    `;
+  });
+  html += `</div>`;
+  el.innerHTML = html;
 }
 
-// Build 3×3 pitch zone grid
-function buildPitchZone(pitches) {
-  // plate: x -0.83 to 0.83, z roughly 1.5 to 3.5
-  // 3x3 grid: cols left/mid/right, rows high/mid/low
+function buildPitchZoneFromData(pitches) {
   const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
-
   pitches.forEach((pitch, i) => {
-    const x = pitch.pitchData?.coordinates?.pX;
-    const z = pitch.pitchData?.coordinates?.pZ;
+    const x = pitch.pX, z = pitch.pZ;
     if (x===undefined||z===undefined||x===null||z===null) return;
     const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
     const row = z > 2.83 ? 0 : z < 2.0 ? 2 : 1;
-    const desc = pitch.details?.description || '';
-    const type = pitch.details?.type?.code || '';
-    zones[row][col].push({ num: i+1, desc, type, isStrike: isStrikePitch(desc), isHit: desc.includes('play') });
+    const isStrike = isStrikePitch(pitch.desc||'');
+    const isHit    = (pitch.desc||'').toLowerCase().includes('play');
+    zones[row][col].push({ num: i+1, isStrike, isHit });
   });
-
   let html = `<div class="pitch-zone">`;
-  // Outside border row (high)
-  for (let row=0; row<3; row++) {
-    for (let col=0; col<3; col++) {
-      const cell = zones[row][col];
-      const dots = cell.map(p => `<span class="zone-dot ${p.isHit?'hit':p.isStrike?'strike':'ball'}" title="${p.desc}">${p.num}</span>`).join('');
-      html += `<div class="zone-cell">${dots}</div>`;
-    }
+  for (let row=0;row<3;row++) for (let col=0;col<3;col++) {
+    const cell = zones[row][col];
+    html += `<div class="zone-cell">${cell.map(p=>`<span class="zone-dot ${p.isHit?'hit':p.isStrike?'strike':'ball'}">${p.num}</span>`).join('')}</div>`;
   }
-  html += `</div>`;
-  return html;
-}
-
-function isStrikePitch(desc) {
-  if (!desc) return false;
-  const d = desc.toLowerCase();
-  return d.includes('strike') || d.includes('foul') || d.includes('swinging');
+  return html + `</div>`;
 }
 
 // ── Pitching log ───────────────────────────────────────────────────────────

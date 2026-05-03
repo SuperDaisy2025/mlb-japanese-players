@@ -24,7 +24,7 @@ function renderLineChart(canvasId, datasets, options = {}) {
         pointHoverRadius: 8,
         pointBorderWidth: 2,
         pointBackgroundColor: PLAYER_COLORS[i % PLAYER_COLORS.length],
-        tension: 0, // ← straight lines
+        tension: 0,
         fill: false,
       }))
     },
@@ -36,27 +36,16 @@ function renderLineChart(canvasId, datasets, options = {}) {
         legend: {
           display: true,
           position: 'top',
-          labels: {
-            color: '#e0e6f0',
-            font: { family: 'Barlow', size: 13 },
-            padding: 16,
-            usePointStyle: true,
-            pointStyleWidth: 14,
-          }
+          labels: { color: '#e0e6f0', font: { family: 'Barlow', size: 13 }, padding: 16, usePointStyle: true, pointStyleWidth: 14 }
         },
-        tooltip: {
-          backgroundColor: '#1a2035',
-          titleColor: '#a0b4cc',
-          bodyColor: '#e0e6f0',
-          borderColor: '#2a3a55',
-          borderWidth: 1,
-          padding: 10,
-        }
+        tooltip: { backgroundColor: '#1a2035', titleColor: '#a0b4cc', bodyColor: '#e0e6f0', borderColor: '#2a3a55', borderWidth: 1, padding: 10 }
       },
       scales: {
         x: {
           type: 'time',
           time: { unit: 'day', displayFormats: { day: 'M/d' } },
+          min: options.xMin || undefined,
+          max: options.xMax || undefined,
           ticks: { color: '#6a8aaa', maxRotation: 0, font: { size: 11 } },
           grid: { color: '#1a2a3a' }
         },

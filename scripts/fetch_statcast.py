@@ -28,9 +28,9 @@ PLAYERS = [
     {"mlbam": 673237, "name_en": "Yoshinobu Yamamoto",  "name_ja": "山本由伸",       "is_pitcher": True,  "is_batter": False},
     {"mlbam": 808969, "name_en": "Roki Sasaki",         "name_ja": "佐々木朗希",     "is_pitcher": True,  "is_batter": False},
     {"mlbam": 506433, "name_en": "Yu Darvish",          "name_ja": "ダルビッシュ有", "is_pitcher": True,  "is_batter": False},
-    {"mlbam": 665750, "name_en": "Yusei Kikuchi",       "name_ja": "菊池雄星",       "is_pitcher": True,  "is_batter": False},
-    {"mlbam": 660644, "name_en": "Kodai Senga",         "name_ja": "千賀滉大",       "is_pitcher": True,  "is_batter": False},
-    {"mlbam": 669203, "name_en": "Shota Imanaga",       "name_ja": "今永昇太",       "is_pitcher": True,  "is_batter": False},
+    {"mlbam": 579328, "name_en": "Yusei Kikuchi",       "name_ja": "菊池雄星",       "is_pitcher": True,  "is_batter": False},
+    {"mlbam": 673540, "name_en": "Kodai Senga",         "name_ja": "千賀滉大",       "is_pitcher": True,  "is_batter": False},
+    {"mlbam": 684007, "name_en": "Shota Imanaga",       "name_ja": "今永昇太",       "is_pitcher": True,  "is_batter": False},
     {"mlbam": 669022, "name_en": "Yuki Matsui",         "name_ja": "松井裕樹",       "is_pitcher": True,  "is_batter": False},
 ]
 

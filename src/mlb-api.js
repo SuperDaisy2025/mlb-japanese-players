@@ -13,17 +13,17 @@ const JAPANESE_PLAYERS = [
   { id: 808967, nameEn: 'Yoshinobu Yamamoto',     nameJa: '山本由伸',         team: 'LAD', teamId: 119, pos: ['SP'],      number: 18, isBatter: false, isPitcher: true  },
   { id: 808963, nameEn: 'Roki Sasaki',            nameJa: '佐々木朗希',       team: 'LAD', teamId: 119, pos: ['SP'],      number: 14, isBatter: false, isPitcher: true  },
   { id: 506433, nameEn: 'Yu Darvish',             nameJa: 'ダルビッシュ有',   team: 'SD',  teamId: 135, pos: ['SP'],      number: 11, isBatter: false, isPitcher: true  },
-  { id: 665750, nameEn: 'Yusei Kikuchi',          nameJa: '菊池雄星',         team: 'LAA', teamId: 108, pos: ['SP'],      number: 16, isBatter: false, isPitcher: true  },
-  { id: 660644, nameEn: 'Kodai Senga',            nameJa: '千賀滉大',         team: 'NYM', teamId: 121, pos: ['SP'],      number: 34, isBatter: false, isPitcher: true  },
-  { id: 669203, nameEn: 'Shota Imanaga',          nameJa: '今永昇太',         team: 'CHC', teamId: 112, pos: ['SP'],      number: 18, isBatter: false, isPitcher: true  },
+  { id: 579328, nameEn: 'Yusei Kikuchi',          nameJa: '菊池雄星',         team: 'LAA', teamId: 108, pos: ['SP'],      number: 16, isBatter: false, isPitcher: true  },
+  { id: 673540, nameEn: 'Kodai Senga',            nameJa: '千賀滉大',         team: 'NYM', teamId: 121, pos: ['SP'],      number: 34, isBatter: false, isPitcher: true  },
+  { id: 684007, nameEn: 'Shota Imanaga',          nameJa: '今永昇太',         team: 'CHC', teamId: 112, pos: ['SP'],      number: 18, isBatter: false, isPitcher: true  },
   { id: 669022, nameEn: 'Yuki Matsui',            nameJa: '松井裕樹',         team: 'SD',  teamId: 135, pos: ['RP'],      number: 73, isBatter: false, isPitcher: true  },
 ];
 
 const BATTERS  = JAPANESE_PLAYERS.filter(p => p.isBatter);
 const PITCHERS = JAPANESE_PLAYERS.filter(p => p.isPitcher);
 
-const DEFAULT_BATTER_IDS  = [660271, 808967, 673548]; // 大谷, 村上, 鈴木
-const DEFAULT_PITCHER_IDS = [660271, 673237, 808969]; // 大谷, 山本, 佐々木
+const DEFAULT_BATTER_IDS  = [660271, 808959, 673548]; // 大谷, 村上, 鈴木
+const DEFAULT_PITCHER_IDS = [660271, 808967, 808963]; // 大谷, 山本, 佐々木
 
 const TEAM_COLORS = {
   LAD:'#005A9C', CHC:'#0E3386', BOS:'#BD3039',
