@@ -125,15 +125,21 @@ async function renderBattingCharts() {
     const { start, end } = periodDates(currentPeriod);
 
     const makeDataset = async (p, statKey, group, cumulative) => {
+      // Always fetch full season
       const games = await fetchGameLog(p.id, group);
-      const filtered = games.filter(g => g.date >= start && g.date <= end);
       let cum = 0;
-      const data = filtered.map(g => {
+      const allData = games.map(g => {
         const v = parseFloat(g.stat[statKey]) || 0;
         if (cumulative) { cum += v; return { x: g.date, y: cum }; }
         return { x: g.date, y: v };
       });
-      return { label: currentLang==='ja'?p.nameJa:p.nameEn, data, isHighlight: p.id===660271 };
+      // Cumulative: always show full season so you can see the true total
+      // AVG/OPS/ERA: filter to period
+      if (cumulative) {
+        return { label: currentLang==='ja'?p.nameJa:p.nameEn, data: allData, isHighlight: p.id===660271 };
+      }
+      const filtered = allData.filter(d => d.x >= start && d.x <= end);
+      return { label: currentLang==='ja'?p.nameJa:p.nameEn, data: filtered, isHighlight: p.id===660271 };
     };
 
     const [hrSets, avgSets, opsSets] = await Promise.all([
@@ -219,14 +225,17 @@ async function renderPitchingCharts() {
 
     const makeDataset = async (p, statKey, cumulative=false) => {
       const games = await fetchGameLog(p.id, 'pitching');
-      const filtered = games.filter(g => g.date>=start && g.date<=end);
       let cum = 0;
-      const data = filtered.map(g => {
+      const allData = games.map(g => {
         const v = parseFloat(g.stat[statKey]) || 0;
         if (cumulative) { cum += v; return { x: g.date, y: cum }; }
         return { x: g.date, y: v };
       });
-      return { label: currentLang==='ja'?p.nameJa:p.nameEn, data, isHighlight: p.id===660271 };
+      if (cumulative) {
+        return { label: currentLang==='ja'?p.nameJa:p.nameEn, data: allData, isHighlight: p.id===660271 };
+      }
+      const filtered = allData.filter(d => d.x >= start && d.x <= end);
+      return { label: currentLang==='ja'?p.nameJa:p.nameEn, data: filtered, isHighlight: p.id===660271 };
     };
 
     const [eraSets, winSets, kSets] = await Promise.all([
@@ -417,16 +426,18 @@ async function renderBattingLog(container) {
       const gamePk = game.game?.gamePk;
       const opp = game.opponent?.name || game.team?.name || '?';
       const isHome = game.isHome;
+      // Team score from game stat (not always available in gameLog, we'll fetch on expand)
       html += `
-        <div class="game-log-row" onclick="toggleGameAtBats('${gamePk}',this)">
+        <div class="game-log-row" onclick="toggleGameAtBats('${gamePk}',this,'${opp.replace(/'/g,"\\'")}',${isHome})">
           <span class="gl-date">${game.date?.slice(5)||''}</span>
           <span class="gl-ha">${isHome?'🏠':'✈'}</span>
           <span class="gl-opp">${opp}</span>
+          <span class="gl-score-placeholder" id="score-${gamePk}">-</span>
           <span class="gl-stat">${s.hits??0}/${s.atBats??0}</span>
           <span class="gl-stat">${s.homeRuns??0}HR</span>
           <span class="gl-stat">${s.rbi??0}RBI</span>
-          <span class="gl-avg">${s.avg??'.000'}</span>
-          <span class="gl-ops">${s.ops??'-'}</span>
+          <span class="gl-avg">AVG ${s.avg??'.000'}</span>
+          <span class="gl-ops">OPS ${s.ops??'-'}</span>
           <span class="gl-arrow">▶</span>
         </div>
         <div class="game-atbats" id="atbats-${gamePk}" style="display:none"></div>
@@ -439,7 +450,7 @@ async function renderBattingLog(container) {
   }
 }
 
-async function toggleGameAtBats(gamePk, rowEl) {
+async function toggleGameAtBats(gamePk, rowEl, opp, isHome) {
   if (!gamePk||gamePk==='undefined') return;
   const el = document.getElementById(`atbats-${gamePk}`);
   if (!el) return;
@@ -450,11 +461,34 @@ async function toggleGameAtBats(gamePk, rowEl) {
   el.innerHTML=`<div class="loading-spinner-sm"></div>`;
 
   try {
-    const plays = await fetchGamePlayByPlay(gamePk);
+    // Fetch play-by-play and linescore in parallel
+    const [plays, linescore] = await Promise.all([
+      fetchGamePlayByPlay(gamePk),
+      fetchGameLinescore(gamePk),
+    ]);
+
+    // Update score in row
+    if (linescore) {
+      const away = linescore.teams?.away;
+      const home = linescore.teams?.home;
+      const scoreEl = document.getElementById(`score-${gamePk}`);
+      if (scoreEl && away && home) {
+        const myRuns  = isHome ? home.runs : away.runs;
+        const oppRuns = isHome ? away.runs : home.runs;
+        const wl = myRuns > oppRuns ? 'W' : myRuns < oppRuns ? 'L' : 'T';
+        scoreEl.innerHTML = `<span class="gl-wl ${wl==='W'?'win':wl==='L'?'loss':''}">${wl}${myRuns}-${oppRuns}</span>`;
+      }
+    }
+
     const myPlays = plays.filter(p => p.matchup?.batter?.id===currentPlayer.id);
     if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
-    let html = `<div class="ab-summary-list">`;
+    // Build at-bat results summary line
+    const abResults = myPlays.map(p => shortResult(p.result?.event)).join('　');
+
+    let html = `<div class="ab-results-line">${abResults}</div>`;
+    html += `<div class="ab-summary-list">`;
+
     myPlays.forEach((play, idx) => {
       const result = shortResult(play.result?.event);
       const pitcher = play.matchup?.pitcher?.fullName || '?';
@@ -474,18 +508,26 @@ async function toggleGameAtBats(gamePk, rowEl) {
           <span class="ab-arrow">▶</span>
         </div>
         <div class="ab-detail-panel" id="${abId}" style="display:none">
-          <div class="pitch-table-header">
-            <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span><span>B-S</span><span>${t('outcome')}</span>
-          </div>
-          ${pitches.map((pitch,i)=>`
-            <div class="pitch-row ${i===pitches.length-1?'last-pitch':''}">
-              <span>${i+1}</span>
-              <span>${pitch.details?.type?.description||'-'}</span>
-              <span>${pitch.pitchData?.startSpeed?Math.round(pitch.pitchData.startSpeed)+' mph':'-'}</span>
-              <span>${pitch.count?.balls??0}-${pitch.count?.strikes??0}</span>
-              <span class="pitch-desc">${pitchShort(pitch.details?.description)}</span>
+          <div class="ab-detail-inner">
+            <div class="pitch-detail-left">
+              <div class="pitch-table-header">
+                <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span><span>B-S</span><span>${t('outcome')}</span>
+              </div>
+              ${pitches.map((pitch,i)=>`
+                <div class="pitch-row ${i===pitches.length-1?'last-pitch':''}">
+                  <span>${i+1}</span>
+                  <span>${pitch.details?.type?.description||'-'}</span>
+                  <span>${pitch.pitchData?.startSpeed?Math.round(pitch.pitchData.startSpeed)+' mph':'-'}</span>
+                  <span>${pitch.count?.balls??0}-${pitch.count?.strikes??0}</span>
+                  <span class="pitch-desc">${pitchShort(pitch.details?.description)}</span>
+                </div>
+              `).join('')}
             </div>
-          `).join('')}
+            <div class="pitch-zone-wrap">
+              <div class="zone-label">Strike Zone</div>
+              ${buildPitchZone(pitches)}
+            </div>
+          </div>
         </div>
       `;
     });
@@ -496,13 +538,40 @@ async function toggleGameAtBats(gamePk, rowEl) {
   }
 }
 
-function toggleAbDetail(id, rowEl) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const icon = rowEl.querySelector('.ab-arrow');
-  const open = el.style.display==='block';
-  el.style.display = open ? 'none' : 'block';
-  if(icon) icon.textContent = open ? '▶' : '▼';
+// Build 3×3 pitch zone grid
+function buildPitchZone(pitches) {
+  // plate: x -0.83 to 0.83, z roughly 1.5 to 3.5
+  // 3x3 grid: cols left/mid/right, rows high/mid/low
+  const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
+
+  pitches.forEach((pitch, i) => {
+    const x = pitch.pitchData?.coordinates?.pX;
+    const z = pitch.pitchData?.coordinates?.pZ;
+    if (x===undefined||z===undefined||x===null||z===null) return;
+    const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
+    const row = z > 2.83 ? 0 : z < 2.0 ? 2 : 1;
+    const desc = pitch.details?.description || '';
+    const type = pitch.details?.type?.code || '';
+    zones[row][col].push({ num: i+1, desc, type, isStrike: isStrikePitch(desc), isHit: desc.includes('play') });
+  });
+
+  let html = `<div class="pitch-zone">`;
+  // Outside border row (high)
+  for (let row=0; row<3; row++) {
+    for (let col=0; col<3; col++) {
+      const cell = zones[row][col];
+      const dots = cell.map(p => `<span class="zone-dot ${p.isHit?'hit':p.isStrike?'strike':'ball'}" title="${p.desc}">${p.num}</span>`).join('');
+      html += `<div class="zone-cell">${dots}</div>`;
+    }
+  }
+  html += `</div>`;
+  return html;
+}
+
+function isStrikePitch(desc) {
+  if (!desc) return false;
+  const d = desc.toLowerCase();
+  return d.includes('strike') || d.includes('foul') || d.includes('swinging');
 }
 
 // ── Pitching log ───────────────────────────────────────────────────────────
@@ -550,39 +619,145 @@ async function toggleGamePitching(gamePk, rowEl) {
   el.innerHTML=`<div class="loading-spinner-sm"></div>`;
 
   try {
-    const plays = await fetchPitchData(gamePk, currentPlayer.id);
+    const [plays, linescore] = await Promise.all([
+      fetchPitchData(gamePk, currentPlayer.id),
+      fetchGameLinescore(gamePk),
+    ]);
+
     if (!plays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
-    let pitchCount=0;
-    let html=`<div class="pitch-log-table">
-      <div class="pst-header"><span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span><span>Batter</span><span>B-S</span><span>${t('outcome')}</span></div>`;
-
+    // Collect all pitches with metadata
+    const allPitches = [];
+    let pitchCount = 0;
     plays.forEach(play => {
       const batter = play.matchup?.batter?.fullName||'?';
       const pitches = play.playEvents?.filter(e=>e.isPitch)||[];
-      pitches.forEach((pitch,i) => {
+      pitches.forEach((pitch, i) => {
         pitchCount++;
-        const isFinal = i===pitches.length-1;
-        const type = pitch.details?.type?.description||'-';
-        const speed = pitch.pitchData?.startSpeed?Math.round(pitch.pitchData.startSpeed)+' mph':'-';
-        const desc = pitchShort(pitch.details?.description);
-        const b = pitch.count?.balls??0, str = pitch.count?.strikes??0;
-        html += `
-          <div class="pst-row ${isFinal?'final-pitch':''}">
-            <span>${pitchCount}</span>
-            <span>${type}</span>
-            <span>${speed}</span>
-            <span class="batter-cell">${batter}</span>
-            <span>${b}-${str}</span>
-            <span class="pitch-outcome">${desc}</span>
-          </div>`;
+        allPitches.push({
+          num: pitchCount,
+          type: pitch.details?.type?.description||'-',
+          typeCode: pitch.details?.type?.code||'',
+          speed: pitch.pitchData?.startSpeed ? Math.round(pitch.pitchData.startSpeed) : null,
+          desc: pitch.details?.description||'-',
+          balls: pitch.count?.balls??0,
+          strikes: pitch.count?.strikes??0,
+          outs: pitch.count?.outs??0,
+          batter,
+          isFinal: i===pitches.length-1,
+          finalEvent: isFinal && i===pitches.length-1 ? play.result?.event : null,
+          pX: pitch.pitchData?.coordinates?.pX,
+          pZ: pitch.pitchData?.coordinates?.pZ,
+          inning: play.about?.inning,
+        });
       });
     });
-    html+=`</div>`;
-    el.innerHTML=html;
+
+    // Build speed/count chart using canvas
+    const chartId = `pitch-chart-${gamePk}`;
+    const zoneId  = `pitch-zone-p-${gamePk}`;
+
+    let html = `
+      <div class="pitching-detail-wrap">
+        <div class="pitching-charts-mini">
+          <div class="mini-chart-block">
+            <div class="mini-chart-title">球速推移 / Pitch Speed</div>
+            <div class="mini-chart-wrap"><canvas id="${chartId}-speed"></canvas></div>
+          </div>
+          <div class="mini-chart-block">
+            <div class="mini-chart-title">ボール-ストライク / Count</div>
+            <div class="mini-chart-wrap"><canvas id="${chartId}-count"></canvas></div>
+          </div>
+          <div class="mini-chart-block">
+            <div class="mini-chart-title">アウト数 / Outs</div>
+            <div class="mini-chart-wrap"><canvas id="${chartId}-outs"></canvas></div>
+          </div>
+        </div>
+        <div class="pitching-log-zone-wrap">
+          <div class="pitch-log-left">
+            <div class="pst-header">
+              <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span>
+              <span>Batter</span><span>B-S</span><span>${t('outcome')}</span>
+            </div>
+            ${allPitches.map(p => `
+              <div class="pst-row ${p.isFinal?'final-pitch':''}">
+                <span>${p.num}</span>
+                <span>${p.type}</span>
+                <span>${p.speed?p.speed+' mph':'-'}</span>
+                <span class="batter-cell">${p.batter}</span>
+                <span>${p.balls}-${p.strikes}</span>
+                <span class="pitch-outcome ${p.isFinal&&p.finalEvent?getResultClass(p.finalEvent):''}">
+                  ${p.isFinal&&p.finalEvent ? shortResult(p.finalEvent) : pitchShort(p.desc)}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="pitch-zone-wrap">
+            <div class="zone-label">投球コース / Zone</div>
+            ${buildPitchZone(allPitches.map(p=>({
+              pitchData:{coordinates:{pX:p.pX,pZ:p.pZ}},
+              details:{description:p.desc,type:{code:p.typeCode}}
+            })))}
+          </div>
+        </div>
+      </div>
+    `;
+
+    el.innerHTML = html;
+
+    // Draw mini charts
+    setTimeout(() => {
+      const nums   = allPitches.map(p=>p.num);
+      const speeds = allPitches.map(p=>p.speed);
+      const balls  = allPitches.map(p=>p.balls);
+      const strikes= allPitches.map(p=>p.strikes);
+      const outs   = allPitches.map(p=>p.outs);
+
+      drawMiniLineChart(`${chartId}-speed`, nums, [{label:'Speed (mph)', data:speeds, color:'#ef4444'}], 'mph');
+      drawMiniLineChart(`${chartId}-count`, nums, [
+        {label:'Balls',   data:balls,   color:'#3b82f6'},
+        {label:'Strikes', data:strikes, color:'#ef4444'},
+      ], '');
+      drawMiniLineChart(`${chartId}-outs`, nums, [{label:'Outs', data:outs, color:'#f59e0b'}], '');
+    }, 100);
+
   } catch(e) {
     el.innerHTML=`<div class="error-msg">${t('error')}</div>`;
   }
+}
+
+function drawMiniLineChart(canvasId, labels, datasets, yLabel) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return;
+  chartInstances[canvasId] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: datasets.map(ds => ({
+        label: ds.label,
+        data: ds.data,
+        borderColor: ds.color,
+        backgroundColor: ds.color+'22',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointStyle: 'circle',
+        tension: 0,
+        spanGaps: true,
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: datasets.length>1, position:'top', labels:{color:'#8ba3be',font:{size:10},padding:8} },
+        tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 }
+      },
+      scales: {
+        x: { ticks:{color:'#6a8aaa',font:{size:10}}, grid:{color:'#1a2a3a'}, title:{display:true,text:'Pitch #',color:'#4a6278',font:{size:10}} },
+        y: { ticks:{color:'#6a8aaa',font:{size:10}}, grid:{color:'#1a2a3a'}, title:{display:!!yLabel,text:yLabel,color:'#4a6278',font:{size:10}} }
+      }
+    }
+  });
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
