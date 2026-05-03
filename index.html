@@ -3,728 +3,208 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0a0e1a">
+<meta name="theme-color" content="#070b14">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="MLB JP">
-<title>MLB日本人選手トラッカー</title>
+<title>MLB日本人選手</title>
 <link rel="manifest" href="manifest.json">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <style>
-/* ============================================================
-   CSS RESET & VARIABLES
-   ============================================================ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --bg-base: #070b14;
-  --bg-surface: #0e1625;
-  --bg-card: #131d30;
-  --bg-hover: #1a2740;
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg: #070b14;
+  --bg2: #0d1526;
+  --bg3: #131e33;
+  --bg4: #1a2740;
   --border: #1e2d45;
-  --border-bright: #2a3e5a;
-  --text-primary: #e8eef8;
-  --text-secondary: #8ba3be;
-  --text-dim: #4a6278;
-  --accent-red: #c8102e;
-  --accent-blue: #1d6fc4;
-  --accent-gold: #f5a623;
-  --accent-green: #22c55e;
-  --accent-teal: #06b6d4;
-  --font-en: 'Barlow', sans-serif;
-  --font-cond: 'Barlow Condensed', sans-serif;
-  --font-ja: 'Noto Sans JP', sans-serif;
-  --radius: 8px;
-  --radius-lg: 12px;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-body {
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-en);
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow-x: hidden;
-}
-
-/* ============================================================
-   APP SHELL
-   ============================================================ */
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(7, 11, 20, 0.95);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border);
-  padding: calc(var(--safe-top) + 8px) 16px 0;
-}
-
-.header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.app-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.logo-icon {
-  width: 36px;
-  height: 36px;
-  background: var(--accent-red);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 800;
-  font-family: var(--font-cond);
-  letter-spacing: -1px;
-  color: white;
-  flex-shrink: 0;
-}
-
-.app-title {
-  font-family: var(--font-cond);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  line-height: 1.2;
-}
-
-.app-subtitle {
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-weight: 400;
-  font-family: var(--font-ja);
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#last-updated {
-  font-size: 10px;
-  color: var(--text-dim);
-  display: none;
-}
-@media(min-width:600px) { #last-updated { display: block; } }
-
-.btn-refresh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-bright);
-  border-radius: 20px;
-  color: var(--text-primary);
-  font-family: var(--font-en);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-.btn-refresh:hover { background: var(--bg-hover); border-color: var(--accent-blue); }
-.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-
-#langBtn {
-  width: 36px;
-  height: 36px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-bright);
-  border-radius: 50%;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-#langBtn:hover { color: var(--text-primary); border-color: var(--accent-blue); }
-
-/* ---- Tabs ---- */
-.tab-nav {
-  display: flex;
-  gap: 0;
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 10px 8px;
-  background: none;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-cond);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-.tab-btn:hover { color: var(--text-primary); }
-.tab-btn.active { color: var(--text-primary); border-bottom-color: var(--accent-red); }
-
-/* ============================================================
-   MAIN CONTENT
-   ============================================================ */
-.app-content {
-  padding: 0 0 calc(var(--safe-bottom) + 20px);
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
-
-/* ---- Period selector ---- */
-.period-selector {
-  display: flex;
-  gap: 6px;
-  padding: 16px 16px 0;
-}
-
-.period-btn {
-  padding: 6px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  font-family: var(--font-cond);
-  letter-spacing: 0.3px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.period-btn:hover { color: var(--text-primary); border-color: var(--border-bright); }
-.period-btn.active {
-  background: var(--accent-blue);
-  border-color: var(--accent-blue);
-  color: white;
-}
-
-/* ---- Stats cards ---- */
-.stats-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
-  padding: 16px;
-}
-
-.stat-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-  overflow: hidden;
-}
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: var(--border);
-  transition: background 0.2s;
-}
-.stat-card:hover { background: var(--bg-hover); border-color: var(--border-bright); transform: translateY(-1px); }
-.stat-card.leader::before { background: var(--accent-gold); }
-.stat-card.leader { border-color: rgba(245, 166, 35, 0.3); }
-
-.stat-card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.player-badge {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-cond);
-  font-size: 16px;
-  font-weight: 800;
-  color: white;
-  flex-shrink: 0;
-}
-
-.stat-card-name { flex: 1; min-width: 0; }
-.name-ja { font-family: var(--font-ja); font-size: 15px; font-weight: 700; }
-.name-en { font-size: 11px; color: var(--text-secondary); font-weight: 400; }
-
-.team-badge {
-  font-family: var(--font-cond);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  background: var(--bg-surface);
-  padding: 3px 8px;
-  border-radius: 4px;
-  letter-spacing: 1px;
-}
-
-.stat-card-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-
-.mini-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.mini-val {
-  font-family: var(--font-cond);
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1;
-}
-.mini-lbl {
-  font-size: 10px;
-  color: var(--text-secondary);
-  margin-top: 2px;
-  font-weight: 500;
-}
-
-/* ---- Charts ---- */
-.batting-charts-section, .pitching-charts-section {
-  padding: 0 16px;
-}
-
-.chart-block {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.chart-title {
-  font-family: var(--font-cond);
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.chart-period-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: var(--bg-surface);
-  padding: 2px 8px;
-  border-radius: 10px;
-}
-
-.chart-wrap {
-  height: 240px;
-  position: relative;
-}
-
-/* ---- Player select grid ---- */
-.player-select-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  padding: 16px;
-}
-
-.player-select-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.player-select-card:hover { background: var(--bg-hover); transform: translateY(-2px); }
-
-.psc-number {
-  font-family: var(--font-cond);
-  font-size: 32px;
-  font-weight: 800;
-  color: var(--accent);
-  line-height: 1;
-}
-.psc-ja { font-family: var(--font-ja); font-size: 16px; font-weight: 700; }
-.psc-en { font-size: 11px; color: var(--text-secondary); }
-.psc-team {
-  font-family: var(--font-cond);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-.psc-pos { font-size: 10px; color: var(--text-dim); }
-
-/* ---- Player detail ---- */
-.player-detail { padding: 0; }
-
-.player-detail-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.back-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text-secondary);
-  padding: 6px 12px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-.back-btn:hover { color: var(--text-primary); border-color: var(--border-bright); }
-
-.player-detail-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.player-detail-number {
-  font-family: var(--font-cond);
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1;
-}
-.player-detail-ja { font-family: var(--font-ja); font-size: 17px; font-weight: 700; }
-.player-detail-en { font-size: 11px; color: var(--text-secondary); }
-
-/* ---- Subtabs ---- */
-.player-subtabs {
-  display: flex;
-  border-bottom: 1px solid var(--border);
-  padding: 0 16px;
-  background: var(--bg-base);
-}
-
-.subtab-btn {
-  padding: 10px 16px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-cond);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.subtab-btn:hover { color: var(--text-primary); }
-.subtab-btn.active { color: var(--text-primary); border-bottom-color: var(--accent-teal); }
-
-/* ---- Summary stats ---- */
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-  padding: 16px;
-}
-
-.summary-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-}
-
-.summary-title {
-  font-family: var(--font-cond);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.summary-stats {
-  display: grid;
-  gap: 0;
-}
-
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.stat-row:last-child { border-bottom: none; }
-.stat-row-label { color: var(--text-secondary); }
-.stat-row-value { font-weight: 600; font-family: var(--font-cond); font-size: 15px; }
-
-/* ---- Statcast section ---- */
-.statcast-section {
-  margin: 0 16px 16px;
-  background: linear-gradient(135deg, var(--bg-card), rgba(29, 111, 196, 0.1));
-  border: 1px solid rgba(29, 111, 196, 0.3);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-}
-
-.badge-statcast {
-  font-size: 10px;
-  font-weight: 600;
-  background: var(--accent-blue);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 10px;
-  letter-spacing: 0.5px;
-}
-
-.statcast-note {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin: 8px 0;
-}
-
-.statcast-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-  margin-top: 8px;
-}
-
-.btn-secondary {
-  padding: 8px 16px;
-  background: var(--accent-blue);
-  border: none;
-  border-radius: var(--radius);
-  color: white;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-  margin-top: 8px;
-}
-.btn-secondary:hover { opacity: 0.85; }
-
-/* ---- Game log ---- */
-.game-log {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.game-log-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: all 0.15s;
-  font-size: 13px;
-}
-.game-log-row:hover { background: var(--bg-hover); }
-
-.game-log-date { color: var(--text-secondary); min-width: 80px; font-size: 12px; }
-.game-log-opp { flex: 1; font-weight: 500; font-family: var(--font-ja); font-size: 12px; }
-
-.game-log-stats {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  font-family: var(--font-cond);
-  font-weight: 600;
-}
-
-.avg-badge, .era-badge {
-  background: var(--bg-surface);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.expand-icon {
-  color: var(--text-dim);
-  font-size: 11px;
-  transition: transform 0.2s;
-}
-
-/* ---- At-bat detail ---- */
-.game-atbats, .game-pitching {
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
-  margin-top: -2px;
-  overflow: hidden;
-}
-
-.atbat-list {
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.atbat-block {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.atbat-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: var(--bg-surface);
-  flex-wrap: wrap;
-}
-
-.ab-num { font-family: var(--font-cond); font-weight: 700; font-size: 12px; color: var(--text-secondary); }
-.ab-pitcher { font-size: 12px; flex: 1; color: var(--text-secondary); font-style: italic; }
-.ab-result { font-size: 12px; font-weight: 600; }
-.ab-rbi { font-size: 11px; background: var(--accent-gold); color: black; padding: 1px 6px; border-radius: 4px; font-weight: 700; }
-
-/* Pitch table */
-.pitch-table { font-size: 12px; }
-.pitch-table-header {
-  display: grid;
-  grid-template-columns: 30px 1fr 80px 1fr;
-  padding: 5px 12px;
-  background: var(--bg-surface);
-  color: var(--text-dim);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.pitch-row {
-  display: grid;
-  grid-template-columns: 30px 1fr 80px 1fr;
-  padding: 5px 12px;
-  border-top: 1px solid var(--border);
-}
-.pitch-row.last-pitch { background: rgba(200, 16, 46, 0.08); }
-.pitch-outcome { font-size: 11px; }
-
-/* Pitch summary table for pitching log */
-.pitch-summary-table { font-size: 12px; }
-.pst-header {
-  display: grid;
-  grid-template-columns: 40px 1fr 80px 1fr 1fr;
-  padding: 5px 12px;
-  background: var(--bg-surface);
-  color: var(--text-dim);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.pst-row {
-  display: grid;
-  grid-template-columns: 40px 1fr 80px 1fr 1fr;
-  padding: 5px 12px;
-  border-top: 1px solid var(--border);
-}
-.pst-row.final-pitch { background: rgba(29, 111, 196, 0.08); }
-.batter-name { font-size: 11px; color: var(--text-secondary); }
-
-/* Result colors */
-.result-hr { color: var(--accent-gold); }
-.result-k { color: var(--accent-red); }
-.result-hit { color: var(--accent-green); }
-.result-walk { color: var(--accent-teal); }
-.result-out { color: var(--text-secondary); }
-
-/* ---- Loading & errors ---- */
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent-blue);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 40px auto;
-}
-.loading-spinner-sm {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent-blue);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 16px auto;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.error-msg {
-  padding: 20px;
-  text-align: center;
-  color: var(--accent-red);
-  font-size: 14px;
-}
-.no-data, .no-data-sm {
-  padding: 16px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 13px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-.spin { display: inline-block; animation: spin 1s linear infinite; }
-
-/* ---- Scrollbar ---- */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: var(--bg-base); }
-::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+  --border2: #2a3e5a;
+  --txt: #e8eef8;
+  --txt2: #8ba3be;
+  --txt3: #4a6278;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --gold: #f59e0b;
+  --green: #22c55e;
+  --teal: #06b6d4;
+  --r: 8px;
+  --rlg: 12px;
+}
+body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-height:100dvh;overflow-x:hidden;font-size:14px}
+
+/* ── Header ── */
+.app-header{position:sticky;top:0;z-index:100;background:rgba(7,11,20,.97);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.header-top{display:flex;align-items:center;justify-content:space-between;padding:8px 14px}
+.app-logo{display:flex;align-items:center;gap:8px}
+.logo-box{background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;padding:4px 8px;border-radius:6px;letter-spacing:.5px}
+.app-title-text{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700}
+.header-right{display:flex;align-items:center;gap:8px}
+#last-updated{font-size:11px;color:var(--txt3)}
+.btn-refresh{display:flex;align-items:center;gap:5px;padding:6px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:20px;color:var(--txt);font-size:13px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-refresh:hover{background:var(--bg4);border-color:var(--blue)}
+.btn-refresh:disabled{opacity:.5;cursor:not-allowed}
+#langBtn{width:34px;height:34px;background:var(--bg3);border:1px solid var(--border2);border-radius:50%;color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;transition:.2s}
+#langBtn:hover{color:var(--txt);border-color:var(--blue)}
+
+/* ── Tabs ── */
+.tab-nav{display:flex}
+.tab-btn{flex:1;padding:9px 4px;background:none;border:none;border-bottom:3px solid transparent;color:var(--txt2);font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:.2s}
+.tab-btn:hover{color:var(--txt)}
+.tab-btn.active{color:var(--txt);border-bottom-color:var(--red)}
+
+/* ── Main ── */
+.app-content{max-width:1100px;margin:0 auto;padding-bottom:40px}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* ── Period selector ── */
+.period-selector{display:flex;gap:6px;padding:14px 14px 0}
+.period-btn{padding:5px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;color:var(--txt2);font-size:12px;font-weight:700;font-family:'Barlow Condensed',sans-serif;letter-spacing:.3px;cursor:pointer;transition:.2s}
+.period-btn:hover{color:var(--txt)}
+.period-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
+
+/* ── Player filter ── */
+.player-filter{padding:10px 14px 0}
+.pf-label{font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.pf-chips{display:flex;flex-wrap:wrap;gap:6px}
+.pf-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s;user-select:none}
+.pf-chip input{display:none}
+.pf-chip:hover{border-color:var(--border2)}
+.pf-chip.active{background:var(--bg4);border-color:var(--blue);color:#fff}
+.pf-logo{width:18px;height:18px;object-fit:contain}
+
+/* ── Stats cards ── */
+.stats-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;padding:12px 14px}
+.stat-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rlg);padding:12px;cursor:pointer;transition:.2s;position:relative}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--border);border-radius:var(--rlg) var(--rlg) 0 0;transition:.2s}
+.stat-card:hover{background:var(--bg4);border-color:var(--border2);transform:translateY(-1px)}
+.stat-card.leader::before{background:var(--gold)}
+.stat-card.leader{border-color:rgba(245,158,11,.3)}
+
+.stat-card-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.team-logo-wrap{width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.team-logo-sm{width:32px;height:32px;object-fit:contain}
+.stat-card-name{flex:1;min-width:0}
+.name-ja{font-family:'Noto Sans JP',sans-serif;font-size:15px;font-weight:700;line-height:1.2}
+.name-en{font-size:12px;color:var(--txt2);margin-top:2px}
+
+.stat-card-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.mini-stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+.mini-val{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;line-height:1}
+.mini-lbl{font-size:11px;color:var(--txt2);font-weight:600}
+
+/* ── Charts ── */
+.batting-charts-section,.pitching-charts-section{padding:0 14px}
+.chart-block{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rlg);padding:14px;margin-bottom:14px}
+.chart-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.chart-badge{font-size:11px;font-weight:500;color:var(--txt2);background:var(--bg2);padding:2px 8px;border-radius:10px}
+.chart-wrap{height:240px;position:relative}
+
+/* ── Section headings ── */
+.section-heading{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3);padding:14px 14px 6px}
+
+/* ── Player select grid ── */
+.player-select-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:0 14px 8px}
+.player-select-card{background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--accent,var(--blue));border-radius:var(--rlg);padding:12px 10px;cursor:pointer;transition:.2s;text-align:center}
+.player-select-card:hover{background:var(--bg4);transform:translateY(-2px)}
+.psc-logo{width:36px;height:36px;object-fit:contain;margin-bottom:4px}
+.psc-number{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;color:var(--accent,var(--blue));line-height:1}
+.psc-ja{font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:700;margin-top:2px}
+.psc-en{font-size:11px;color:var(--txt2);margin-top:1px}
+.psc-meta{font-size:11px;color:var(--txt3);margin-top:3px;font-weight:500}
+
+/* ── Player detail ── */
+.player-detail{padding:0}
+.player-detail-header{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.back-btn{background:none;border:1px solid var(--border);border-radius:var(--r);color:var(--txt2);padding:5px 10px;font-size:13px;cursor:pointer;transition:.2s;white-space:nowrap}
+.back-btn:hover{color:var(--txt);border-color:var(--border2)}
+.team-logo-md{width:40px;height:40px;object-fit:contain}
+.player-detail-ja{font-family:'Noto Sans JP',sans-serif;font-size:17px;font-weight:700}
+.player-detail-en{font-size:12px;color:var(--txt2);margin-top:2px}
+
+/* ── Subtabs ── */
+.player-subtabs{display:flex;border-bottom:1px solid var(--border);padding:0 14px;background:var(--bg)}
+.subtab-btn{padding:9px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--txt2);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:.2s}
+.subtab-btn:hover{color:var(--txt)}
+.subtab-btn.active{color:var(--txt);border-bottom-color:var(--teal)}
+
+/* ── Summary ── */
+.summary-outer{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;padding:14px}
+.summary-section{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rlg);padding:14px}
+.summary-title{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt3);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.summary-grid-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.sr-item{display:flex;flex-direction:column;padding:7px 8px;border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
+.sr-item:nth-child(3n){border-right:none}
+.sr-item:nth-last-child(-n+3){border-bottom:none}
+.sr-lbl{font-size:11px;color:var(--txt2);font-weight:600;margin-bottom:2px}
+.sr-val{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;line-height:1}
+
+.statcast-section{margin:0 14px 14px;background:linear-gradient(135deg,var(--bg3),rgba(59,130,246,.1));border:1px solid rgba(59,130,246,.3);border-radius:var(--rlg);padding:14px}
+.badge-sc{font-size:10px;font-weight:700;background:var(--blue);color:#fff;padding:2px 8px;border-radius:10px}
+.statcast-note{font-size:12px;color:var(--txt2);margin:6px 0}
+.btn-secondary{padding:7px 14px;background:var(--blue);border:none;border-radius:var(--r);color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:.2s;margin-top:8px}
+.btn-secondary:hover{opacity:.85}
+
+/* ── Game log ── */
+.game-log{padding:14px;display:flex;flex-direction:column;gap:2px}
+.game-log-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:.15s;font-size:13px;min-height:38px}
+.game-log-row:hover{background:var(--bg4)}
+.gl-date{color:var(--txt2);min-width:40px;font-size:12px;font-weight:600}
+.gl-ha{font-size:13px;min-width:22px}
+.gl-opp{flex:1;font-family:'Noto Sans JP',sans-serif;font-size:12px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gl-stat{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;min-width:38px;text-align:center}
+.gl-avg{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--gold);min-width:44px;text-align:right}
+.gl-ops{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--txt2);min-width:36px;text-align:right}
+.gl-wl{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;min-width:24px;text-align:center}
+.gl-wl.win{color:var(--green)}
+.gl-wl.loss{color:var(--red)}
+.gl-arrow{color:var(--txt3);font-size:10px;margin-left:auto;flex-shrink:0}
+
+/* ── At-bat summary ── */
+.game-atbats,.game-pitching{background:var(--bg);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r) var(--r);margin-top:-2px}
+.ab-summary-list{padding:6px 8px;display:flex;flex-direction:column;gap:2px}
+
+.ab-summary-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;transition:.15s}
+.ab-summary-row:hover{background:var(--bg4)}
+.ab-idx{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--txt3);min-width:20px}
+.ab-result-badge{font-weight:700;min-width:80px;font-size:13px}
+.ab-count{font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--txt2);min-width:30px}
+.ab-pitcher-name{flex:1;color:var(--txt2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ab-npitches{color:var(--txt3);font-size:11px;min-width:30px;text-align:right}
+.ab-arrow{color:var(--txt3);font-size:10px;margin-left:4px}
+
+.ab-detail-panel{background:var(--bg2);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;margin-top:-1px}
+.pitch-table-header{display:grid;grid-template-columns:28px 1fr 75px 45px 1fr;padding:4px 10px;background:var(--bg3);color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.pitch-row{display:grid;grid-template-columns:28px 1fr 75px 45px 1fr;padding:5px 10px;border-top:1px solid var(--border);font-size:12px}
+.pitch-row.last-pitch{background:rgba(239,68,68,.08)}
+.pitch-desc{font-size:11px;color:var(--txt2)}
+
+/* ── Pitch log ── */
+.pitch-log-table{font-size:12px}
+.pst-header{display:grid;grid-template-columns:32px 1fr 75px 1fr 40px 1fr;padding:5px 12px;background:var(--bg3);color:var(--txt3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.pst-row{display:grid;grid-template-columns:32px 1fr 75px 1fr 40px 1fr;padding:5px 12px;border-top:1px solid var(--border)}
+.pst-row.final-pitch{background:rgba(59,130,246,.08)}
+.batter-cell{font-size:11px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pitch-outcome{font-size:11px}
+
+/* ── Result colors ── */
+.r-hr{color:var(--gold)}
+.r-k{color:var(--red)}
+.r-hit{color:var(--green)}
+.r-walk{color:var(--teal)}
+.r-out{color:var(--txt2)}
+
+/* ── Loading ── */
+.loading-spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:36px auto}
+.loading-spinner-sm{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:14px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin 1s linear infinite}
+.error-msg{padding:20px;text-align:center;color:var(--red);font-size:13px}
+.no-data,.no-data-sm{padding:14px;text-align:center;color:var(--txt3);font-size:13px}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 </style>
 </head>
 <body>
@@ -732,70 +212,54 @@ body {
 <header class="app-header">
   <div class="header-top">
     <div class="app-logo">
-      <div class="logo-icon">MLB</div>
-      <div>
-        <div class="app-title" id="appTitleEl">MLB日本人選手トラッカー</div>
-      </div>
+      <div class="logo-box">MLB</div>
+      <div class="app-title-text" data-i18n="appTitle">MLB日本人選手</div>
     </div>
-    <div class="header-actions">
+    <div class="header-right">
       <span id="last-updated"></span>
-      <button class="btn-refresh" id="refresh-btn" onclick="refreshData()">
-        ↻ <span data-i18n="btnRefresh">データ更新</span>
-      </button>
+      <button class="btn-refresh" id="refresh-btn" onclick="refreshData()">↻ <span data-i18n="btnRefresh">更新</span></button>
       <button id="langBtn" onclick="toggleLang()">EN</button>
     </div>
   </div>
   <nav class="tab-nav">
-    <button class="tab-btn" id="tab-batting" onclick="switchTab('batting')">
-      🏏 <span data-i18n="tabBatting">打者</span>
-    </button>
-    <button class="tab-btn" id="tab-pitching" onclick="switchTab('pitching')">
-      ⚾ <span data-i18n="tabPitching">投手</span>
-    </button>
-    <button class="tab-btn" id="tab-players" onclick="switchTab('players')">
-      👤 <span data-i18n="tabPlayers">選手</span>
-    </button>
+    <button class="tab-btn active" id="tab-batting" onclick="switchTab('batting')">🏏 <span data-i18n="tabBatting">打者</span></button>
+    <button class="tab-btn" id="tab-pitching" onclick="switchTab('pitching')">⚾ <span data-i18n="tabPitching">投手</span></button>
+    <button class="tab-btn" id="tab-players" onclick="switchTab('players')">👤 <span data-i18n="tabPlayers">選手</span></button>
   </nav>
 </header>
 
 <main class="app-content">
 
-  <!-- ======== BATTING TAB ======== -->
-  <div class="tab-panel" id="panel-batting">
+  <!-- BATTING -->
+  <div class="tab-panel active" id="panel-batting">
     <div class="period-selector">
-      <button class="period-btn" data-period="1w" onclick="switchPeriod('1w')" data-i18n-text="period1W">直近1週間</button>
-      <button class="period-btn" data-period="1m" onclick="switchPeriod('1m')" data-i18n-text="period1M">直近1か月</button>
-      <button class="period-btn active" data-period="season" onclick="switchPeriod('season')" data-i18n-text="periodSeason">今季全体</button>
+      <button class="period-btn" data-period="1w" onclick="switchPeriod('1w')" data-i18n="period1W">直近1週間</button>
+      <button class="period-btn" data-period="1m" onclick="switchPeriod('1m')" data-i18n="period1M">直近1か月</button>
+      <button class="period-btn active" data-period="season" onclick="switchPeriod('season')" data-i18n="periodSeason">今季全体</button>
     </div>
-
-    <div id="batting-overview" style="padding-top:16px"></div>
-
-    <div class="batting-charts-section">
+    <div id="batting-overview" style="padding-top:12px"></div>
+    <div id="batting-filter"></div>
+    <div class="batting-charts-section" style="padding-top:12px">
       <div id="batting-charts"></div>
     </div>
   </div>
 
-  <!-- ======== PITCHING TAB ======== -->
+  <!-- PITCHING -->
   <div class="tab-panel" id="panel-pitching">
     <div class="period-selector">
-      <button class="period-btn" data-period="1w" onclick="switchPeriod('1w')">直近1週間</button>
-      <button class="period-btn" data-period="1m" onclick="switchPeriod('1m')">直近1か月</button>
-      <button class="period-btn active" data-period="season" onclick="switchPeriod('season')">今季全体</button>
+      <button class="period-btn" data-period="1w" onclick="switchPeriod('1w')" data-i18n="period1W">直近1週間</button>
+      <button class="period-btn" data-period="1m" onclick="switchPeriod('1m')" data-i18n="period1M">直近1か月</button>
+      <button class="period-btn active" data-period="season" onclick="switchPeriod('season')" data-i18n="periodSeason">今季全体</button>
     </div>
-
-    <div id="pitching-overview" style="padding-top:16px"></div>
-
-    <div class="pitching-charts-section">
+    <div id="pitching-overview" style="padding-top:12px"></div>
+    <div id="pitching-filter"></div>
+    <div class="pitching-charts-section" style="padding-top:12px">
       <div id="pitching-charts"></div>
     </div>
   </div>
 
-  <!-- ======== PLAYERS TAB ======== -->
-  <div class="tab-panel" id="panel-players">
-    <div class="player-select-grid">
-      <!-- populated by JS -->
-    </div>
-  </div>
+  <!-- PLAYERS -->
+  <div class="tab-panel" id="panel-players"></div>
 
 </main>
 
