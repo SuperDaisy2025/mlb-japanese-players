@@ -158,20 +158,24 @@ async function fetchTeamStandingsHistory(teamId) {
 function shortResult(event) {
   if (!event) return '-';
   const e = event.toLowerCase();
-  if (e.includes('home_run')) return '🏠 HR';
-  if (e === 'strikeout')      return '🔴 K';
-  if (e.includes('single'))   return '✅ 1B';
-  if (e.includes('double') && !e.includes('play')) return '✅ 2B';
-  if (e.includes('triple'))   return '✅ 3B';
-  if (e.includes('walk'))     return '🔵 BB';
-  if (e.includes('hit_by'))   return '🔵 HBP';
-  if (e.includes('flyout') || e.includes('fly_out')) return '⬆ Flyout';
-  if (e.includes('grounded_into') || e.includes('ground_out')) return '⬇ GO';
-  if (e.includes('lineout') || e.includes('line_out')) return '➡ Lineout';
-  if (e.includes('sac_fly'))  return '⬆ SF';
-  if (e.includes('double_play')) return '⬇ DP';
-  if (e.includes('fielders_choice')) return '⬇ FC';
-  if (e.includes('error'))    return '🟡 E';
+  if (e.includes('home_run'))   return '🏠 Home Run';
+  if (e === 'strikeout')        return '🔴 Strike Out';
+  if (e.includes('single'))     return '✅ Single';
+  if (e.includes('double') && !e.includes('play')) return '✅ Double';
+  if (e.includes('triple'))     return '✅ Triple';
+  if (e.includes('walk'))       return '🔵 Walk';
+  if (e.includes('hit_by'))     return '🔵 Hit By Pitch';
+  if (e.includes('sac_fly'))    return '⬆ Sac Fly';
+  if (e.includes('double_play'))return '⬇ Double Play';
+  if (e.includes('grounded_into')) return '⬇ Ground Out';
+  if (e.includes('ground_out')) return '⬇ Ground Out';
+  if (e.includes('flyout')||e.includes('fly_out')) return '⬆ Fly Out';
+  if (e.includes('lineout')||e.includes('line_out')) return '➡ Line Out';
+  if (e.includes('pop_out')||e.includes('popout')) return '⬆ Pop Out';
+  if (e.includes('fielders_choice')) return '⬇ Fielder\'s Choice';
+  if (e.includes('error'))      return '🟡 Reach on Error';
+  if (e.includes('intent_walk')) return '🔵 Int. Walk';
+  if (e.includes('catcher_interf')) return '🔵 Catcher Int.';
   return event.replace(/_/g,' ');
 }
 

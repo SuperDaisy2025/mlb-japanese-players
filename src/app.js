@@ -12,12 +12,12 @@ let gameLogCache = {};
 
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[MLB v10] App starting...');
+  console.log('[MLB v11] App starting...');
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   setLang(currentLang);
   await switchTab('batting');
   updateLastUpdatedDisplay();
-  console.log('[MLB v10] App ready.');
+  console.log('[MLB v11] App ready.');
 });
 
 // ── Tab switching ─────────────────────────────────────────────────────────
@@ -463,14 +463,29 @@ async function renderBattingLog(container) {
         event: p.result?.event,
         pitcher: p.matchup?.pitcher?.fullName,
         inning: p.about?.inning,
+        outs: p.count?.outs ?? p.about?.halfInning === 'top' ? p.count?.outs : p.count?.outs,
+        outsWhenUp: p.count?.outs ?? 0,
+        runners: {
+          first:  !!p.matchup?.postOnFirst?.id  || !!p.runners?.find(r=>r.movement?.end==='1B'),
+          second: !!p.matchup?.postOnSecond?.id || !!p.runners?.find(r=>r.movement?.end==='2B'),
+          third:  !!p.matchup?.postOnThird?.id  || !!p.runners?.find(r=>r.movement?.end==='3B'),
+        },
+        runnersOnBefore: {
+          first:  !!p.matchup?.splits?.menOnBase?.includes('Men_On') || false,
+          second: false,
+          third:  false,
+        },
+        onFirst:  !!p.matchup?.splits?.menOnBase,
         pitches: (p.playEvents?.filter(e=>e.isPitch)||[]).map(pitch=>({
           type: pitch.details?.type?.description,
           speed: pitch.pitchData?.startSpeed ? Math.round(pitch.pitchData.startSpeed) : null,
           desc: pitch.details?.description,
           balls: pitch.count?.balls??0,
           strikes: pitch.count?.strikes??0,
+          outs: pitch.count?.outs??0,
           pX: pitch.pitchData?.coordinates?.pX,
           pZ: pitch.pitchData?.coordinates?.pZ,
+          isStrike: isStrikeCall(pitch.details?.description),
         }))
       })));
 
@@ -509,7 +524,7 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
 
   // Get play data from JS Map cache
   const myPlays = (window._playsCache || new Map()).get(String(gamePk)) || [];
-  console.log(`[MLB v10] toggleGameAtBats gamePk=${gamePk}, plays found=${myPlays.length}, cache size=${(window._playsCache||new Map()).size}`);
+  console.log(`[MLB v11] toggleGameAtBats gamePk=${gamePk}, plays found=${myPlays.length}, cache size=${(window._playsCache||new Map()).size}`);
   if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
   let html = `<div class="ab-summary-list">`;
@@ -521,11 +536,26 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
     const balls   = last?.balls ?? 0;
     const strikes = last?.strikes ?? 0;
     const inning  = play.inning ? `${play.inning}回` : '';
+    const outsWhenUp = play.outsWhenUp ?? 0;
+    const outsDisplay = '●'.repeat(outsWhenUp) + '○'.repeat(Math.max(0,2-outsWhenUp));
+    const r1 = play.runners?.first, r2 = play.runners?.second, r3 = play.runners?.third;
+    const runnersDisplay = `
+      <span class="ab-runners">
+        <span class="base-diamond">
+          <span class="base b2 ${r2?'on':''}"></span>
+          <span class="base b3 ${r3?'on':''}"></span>
+          <span class="base b1 ${r1?'on':''}"></span>
+          <span class="base-home"></span>
+        </span>
+      </span>
+    `;
     const abId    = `ab-${gamePk}-${idx}`;
 
     html += `
       <div class="ab-summary-row" onclick="toggleAbDetail('${abId}',this)">
         <span class="ab-inning">${inning}</span>
+        <span class="ab-outs" title="${outsWhenUp} outs">${outsDisplay}</span>
+        ${runnersDisplay}
         <span class="ab-result-badge ${getResultClass(play.event)}">${result}</span>
         <span class="ab-count">${balls}-${strikes}</span>
         <span class="ab-pitcher-name">vs ${pitcher}</span>
@@ -598,84 +628,71 @@ function pitchTypeColor(type) {
   return '#6a8aaa';
 }
 
-// ── Build pitch zone: small colored dots by pitch type ─────────────────────
+function isStrikeCall(desc) {
+  if (!desc) return false;
+  const d = desc.toLowerCase();
+  return d.includes('strike') || d.includes('foul') || d.includes('swinging');
+}
+
+// ── SVG scatter plot pitch zone ────────────────────────────────────────────
 function buildPitchZoneTyped(pitches, zoneId, dotPrefix='zdot') {
-  const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
-  pitches.forEach((pitch, i) => {
-    const x = pitch.pX ?? pitch.pitchData?.coordinates?.pX;
-    const z = pitch.pZ ?? pitch.pitchData?.coordinates?.pZ;
-    if (x===null||x===undefined||z===null||z===undefined) return;
-    const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
-    const row = z > 2.83  ? 0 : z < 2.0  ? 2 : 1;
-    const type  = pitch.type || '';
-    const color = pitchTypeColor(type);
-    const isLast = i === pitches.length-1;
-    zones[row][col].push({ idx:i, color, type, isLast });
-  });
-  const rowLabels = ['Hi','Mid','Lo'];
-  let html = `<div class="pzone-wrap">`;
-  html += `<div class="pzone-col-hdr"><span></span><span>In</span><span>Mid</span><span>Out</span></div>`;
-  for (let row=0;row<3;row++) {
-    html += `<div class="pzone-row"><span class="pzone-rlbl">${rowLabels[row]}</span>`;
-    for (let col=0;col<3;col++) {
-      html += `<div class="pzone-cell${row===1&&col===1?' pzone-center':''}">`;
-      zones[row][col].forEach(p => {
-        html += `<span class="pzdot${p.isLast?' pzdot-last':''}" id="${dotPrefix}-${zoneId}-${p.idx}" style="background:${p.color}" title="${p.type}"></span>`;
-      });
-      html += `</div>`;
-    }
-    html += `</div>`;
+  const W=200, H=220;
+  const toSvgX = x => ((parseFloat(x)+2)/4)*W;
+  const toSvgY = z => H - ((parseFloat(z)/5)*H);
+  const szX1=toSvgX(-0.83), szX2=toSvgX(0.83);
+  const szY1=toSvgY(3.5),   szY2=toSvgY(1.5);
+  const szW=szX2-szX1, szH=szY2-szY1;
+
+  let svg = `<svg class="pitch-scatter" width="100%" viewBox="0 0 ${W} ${H}" style="max-width:${W}px">`;
+  svg += `<rect x="${szX1}" y="${szY1}" width="${szW}" height="${szH}" fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.5)" stroke-width="1.5"/>`;
+  for(let i=1;i<3;i++){
+    svg += `<line x1="${szX1+szW/3*i}" y1="${szY1}" x2="${szX1+szW/3*i}" y2="${szY2}" stroke="rgba(255,255,255,.15)" stroke-width=".5"/>`;
+    svg += `<line x1="${szX1}" y1="${szY1+szH/3*i}" x2="${szX2}" y2="${szY1+szH/3*i}" stroke="rgba(255,255,255,.15)" stroke-width=".5"/>`;
   }
-  html += `</div>`;
-  return html;
-}
+  svg += `<polygon points="${W/2-5},${H-4} ${W/2+5},${H-4} ${W/2+7},${H-1} ${W/2-7},${H-1}" fill="rgba(255,255,255,.25)"/>`;
 
-function buildPitchZoneLarge(pitches, gamePk) {
-  return buildPitchZoneTyped(pitches, gamePk, 'zdot');
-}
-
-function highlightZonePitch(gamePk, pitchNum) {
-  // Dim all, highlight the hovered pitch
-  document.querySelectorAll(`[id^="zdot-${gamePk}-"]`).forEach(dot => {
-    dot.style.opacity = '0.25';
-    dot.style.transform = 'scale(1)';
-    dot.style.boxShadow = 'none';
+  pitches.forEach((pitch,i) => {
+    const x=pitch.pX??pitch.pitchData?.coordinates?.pX;
+    const z=pitch.pZ??pitch.pitchData?.coordinates?.pZ;
+    if(x==null||z==null) return;
+    const cx=toSvgX(x).toFixed(1), cy=toSvgY(z).toFixed(1);
+    if(cx<-15||cx>W+15||cy<-15||cy>H+15) return;
+    const type=pitch.type||pitch.details?.type?.description||'';
+    const color=pitchTypeColor(type);
+    const desc=(pitch.desc||pitch.details?.description||'').toLowerCase();
+    const isStr=desc.includes('strike')||desc.includes('foul')||desc.includes('swinging');
+    const isHit=desc.includes('in play')||desc.includes('hit_into');
+    const isLast=i===pitches.length-1;
+    const r=isLast?6:4.5;
+    const stroke=isStr?'rgba(255,255,255,.9)':isHit?'rgba(255,220,50,.9)':'rgba(255,255,255,.2)';
+    const sw=isStr||isHit?1.5:.5;
+    svg += `<circle id="${dotPrefix}-${zoneId}-${i}" cx="${cx}" cy="${cy}" r="${r}" fill="${color}" fill-opacity="${isStr?.9:.55}" stroke="${stroke}" stroke-width="${sw}" style="cursor:pointer" onmouseenter="highlightScatterDot('${dotPrefix}','${zoneId}',${i},${r})" onmouseleave="clearScatterHighlight('${dotPrefix}','${zoneId}',${r})"><title>${type}${pitch.speed?' '+pitch.speed+'mph':''}</title></circle>`;
   });
-  const target = document.getElementById(`zdot-${gamePk}-${pitchNum}`);
-  if (target) {
-    target.style.opacity = '1';
-    target.style.transform = 'scale(1.5)';
-    target.style.boxShadow = '0 0 8px 3px rgba(255,255,255,0.7)';
-  }
+  svg += `</svg>`;
+  return svg;
 }
 
-function clearZoneHighlight(gamePk) {
-  document.querySelectorAll(`[id^="zdot-${gamePk}-"]`).forEach(dot => {
-    dot.style.opacity = '1';
-    dot.style.transform = 'scale(1)';
-    dot.style.boxShadow = 'none';
+function buildPitchZoneLarge(pitches, gamePk) { return buildPitchZoneTyped(pitches, gamePk, 'zdot'); }
+function buildPitchZoneFromData(pitches)       { return buildPitchZoneTyped(pitches, 'batter', 'bzdot'); }
+
+function highlightScatterDot(prefix, zoneId, idx, origR) {
+  document.querySelectorAll(`[id^="${prefix}-${zoneId}-"]`).forEach(el=>{ el.setAttribute('fill-opacity','.15'); });
+  const t=document.getElementById(`${prefix}-${zoneId}-${idx}`);
+  if(t){ t.setAttribute('fill-opacity','1'); t.setAttribute('r',origR*1.8); t.style.filter='drop-shadow(0 0 4px rgba(255,255,255,.9))'; }
+}
+function clearScatterHighlight(prefix, zoneId, origR) {
+  document.querySelectorAll(`[id^="${prefix}-${zoneId}-"]`).forEach((el,i)=>{
+    el.setAttribute('fill-opacity', el.getAttribute('fill-opacity')==='1' ? '.9' : '.55');
+    el.style.filter='none';
   });
+  // simpler: just restore all
+  document.querySelectorAll(`[id^="${prefix}-${zoneId}-"]`).forEach(el=>{ el.removeAttribute('style'); el.setAttribute('fill-opacity','.6'); });
 }
 
-function buildPitchZoneFromData(pitches) {
-  const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
-  pitches.forEach((pitch, i) => {
-    const x = pitch.pX, z = pitch.pZ;
-    if (x===undefined||z===undefined||x===null||z===null) return;
-    const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
-    const row = z > 2.83 ? 0 : z < 2.0 ? 2 : 1;
-    const desc = (pitch.desc||'').toLowerCase();
-    const isStrike = desc.includes('strike') || desc.includes('foul') || desc.includes('swinging');
-    const isHit    = desc.includes('play');
-    zones[row][col].push({ num: i+1, isStrike, isHit });
-  });
-  let html = `<div class="pitch-zone">`;
-  for (let row=0;row<3;row++) for (let col=0;col<3;col++) {
-    const cell = zones[row][col];
-    html += `<div class="zone-cell">${cell.map(p=>`<span class="zone-dot ${p.isHit?'hit':p.isStrike?'strike':'ball'}">${p.num}</span>`).join('')}</div>`;
-  }
-  return html + `</div>`;
-}
+function highlightZonePitch(gamePk, idx)    { highlightScatterDot('zdot', gamePk, idx, 4.5); }
+function clearZoneHighlight(gamePk)          { clearScatterHighlight('zdot', gamePk, 4.5); }
+function highlightBatterZonePitch(abId, idx) { highlightScatterDot('bzdot', abId, idx, 4.5); }
+function clearBatterZoneHighlight(abId)      { clearScatterHighlight('bzdot', abId, 4.5); }
 
 // ── Pitching log ───────────────────────────────────────────────────────────
 async function renderPitchingLog(container) {
@@ -722,12 +739,12 @@ async function toggleGamePitching(gamePk, rowEl) {
   el.innerHTML=`<div class="loading-spinner-sm"></div>`;
 
   try {
-    console.log(`[MLB v10] toggleGamePitching gamePk=${gamePk}, playerId=${currentPlayer?.id}`);
+    console.log(`[MLB v11] toggleGamePitching gamePk=${gamePk}, playerId=${currentPlayer?.id}`);
     const [plays, linescore] = await Promise.all([
       fetchPitchData(gamePk, currentPlayer.id),
       fetchGameLinescore(gamePk),
     ]);
-    console.log(`[MLB v10] pitching plays=${plays.length}`);
+    console.log(`[MLB v11] pitching plays=${plays.length}`);
 
     if (!plays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
@@ -830,12 +847,44 @@ async function toggleGamePitching(gamePk, rowEl) {
       const strikes = allPitches.map(p=>p.strikes);
       const outs    = allPitches.map(p=>p.outs);
 
-      drawMiniLineChart(`${chartId}-speed`, nums, [{label:'Speed (mph)', data:speeds, color:'#ef4444'}], 'mph');
+      // Compute inning boundaries for vertical annotations
+      const inningLines = [];
+      let lastInning = allPitches[0]?.inning;
+      allPitches.forEach((p,i)=>{
+        if(i>0 && p.inning !== lastInning) {
+          inningLines.push({ num: p.num, inning: p.inning });
+          lastInning = p.inning;
+        }
+      });
+
+      // Cumulative average speeds
+      const cumulativeAvg = speeds.map((s,i) => {
+        const valid = speeds.slice(0,i+1).filter(v=>v!=null);
+        return valid.length ? Math.round(valid.reduce((a,b)=>a+b,0)/valid.length*10)/10 : null;
+      });
+
+      const inningAnnotations = {};
+      inningLines.forEach(il => {
+        inningAnnotations[`inning${il.inning}`] = {
+          type:'line', xMin:il.num-.5, xMax:il.num-.5,
+          borderColor:'rgba(255,255,255,.2)', borderWidth:1, borderDash:[4,4],
+          label:{content:`${il.inning}回`,display:true,color:'rgba(255,255,255,.4)',font:{size:9},position:'start'}
+        };
+      });
+
+      drawMiniLineChart(`${chartId}-speed`, nums,
+        [{label:'Speed (mph)', data:speeds, color:'#ef4444'},
+         {label:'Avg', data:cumulativeAvg, color:'#f59e0b', dash:[4,4], width:1}],
+        'mph', inningAnnotations);
+
       drawMiniLineChart(`${chartId}-count`, nums, [
         {label:'Balls',   data:balls,   color:'#3b82f6'},
         {label:'Strikes', data:strikes, color:'#ef4444'},
-      ], '');
-      drawMiniLineChart(`${chartId}-outs`, nums, [{label:'Outs', data:outs, color:'#f59e0b'}], '');
+      ], '', inningAnnotations);
+
+      drawMiniLineChart(`${chartId}-outs`, nums,
+        [{label:'Outs', data:outs, color:'#f59e0b'}],
+        '', inningAnnotations);
 
       // Build pitch type legend
       const typesSeen = {};
@@ -849,12 +898,12 @@ async function toggleGamePitching(gamePk, rowEl) {
     }, 100);
 
   } catch(e) {
-    console.error('[MLB v10] toggleGamePitching error:', e);
+    console.error('[MLB v11] toggleGamePitching error:', e);
     el.innerHTML=`<div class="error-msg">${t('error')}: ${e.message}</div>`;
   }
 }
 
-function drawMiniLineChart(canvasId, labels, datasets, yLabel) {
+function drawMiniLineChart(canvasId, labels, datasets, yLabel, annotations={}) {
   destroyChart(canvasId);
   const ctx = document.getElementById(canvasId)?.getContext('2d');
   if (!ctx) return;
@@ -867,8 +916,9 @@ function drawMiniLineChart(canvasId, labels, datasets, yLabel) {
         data: ds.data,
         borderColor: ds.color,
         backgroundColor: ds.color+'22',
-        borderWidth: 2,
-        pointRadius: 3,
+        borderWidth: ds.width||2,
+        borderDash: ds.dash||[],
+        pointRadius: ds.dash ? 0 : 3,
         pointStyle: 'circle',
         tension: 0,
         spanGaps: true,
@@ -877,8 +927,9 @@ function drawMiniLineChart(canvasId, labels, datasets, yLabel) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: datasets.length>1, position:'top', labels:{color:'#8ba3be',font:{size:10},padding:8} },
-        tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 }
+        legend: { display: datasets.length>1, position:'top', labels:{color:'#8ba3be',font:{size:10},padding:8,usePointStyle:true} },
+        tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 },
+        annotation: Object.keys(annotations).length ? { annotations } : undefined,
       },
       scales: {
         x: { ticks:{color:'#6a8aaa',font:{size:10}}, grid:{color:'#1a2a3a'}, title:{display:true,text:'Pitch #',color:'#4a6278',font:{size:10}} },
@@ -964,10 +1015,14 @@ async function renderTeamStandings(container) {
     ]);
 
     // Build standings table - grouped by division
-    let standingsHtml = `<div class="team-standings-section"><div class="summary-title">${leagueName} 順位表</div>`;
+    let myDivision = null;
+    let standingsHtml = `<div class="team-standings-section"><div class="standings-league-title">${leagueName}</div>`;
 
     standingsRecords.forEach(division => {
       const divName = division.division?.name || '';
+      const hasMyTeam = division.teamRecords?.some(r => r.team?.id === teamId);
+      if (hasMyTeam) myDivision = division;
+
       standingsHtml += `
         <div class="standings-division">
           <div class="standings-div-title">${divName}</div>
@@ -983,8 +1038,8 @@ async function renderTeamStandings(container) {
           <div class="standings-row ${isMyTeam?'my-team':''}">
             <span class="standings-rank">${idx+1}</span>
             <span class="standings-team">${isMyTeam?`<strong>${rec.team?.name||''}</strong>`:rec.team?.name||''}</span>
-            <span>${rec.wins??'-'}</span>
-            <span>${rec.losses??'-'}</span>
+            <span class="standings-w">${rec.wins??'-'}</span>
+            <span class="standings-l">${rec.losses??'-'}</span>
             <span>${rec.winningPercentage??'-'}</span>
             <span>${gb}</span>
           </div>
@@ -994,76 +1049,109 @@ async function renderTeamStandings(container) {
     });
     standingsHtml += `</div>`;
 
-    // Build rank history from schedule
-    // Calculate cumulative W/L and standings position over time
-    let wins=0, losses=0;
-    const rankHistory = [];
-
-    scheduleDates.forEach(d => {
-      d.games?.forEach(game => {
-        if (game.status?.abstractGameState !== 'Final') return;
-        const isHome = game.teams?.home?.team?.id === teamId;
-        const myTeam = isHome ? game.teams?.home : game.teams?.away;
-        const didWin = myTeam?.isWinner;
-        if (didWin===undefined) return;
-        if (didWin) wins++; else losses++;
-        rankHistory.push({ date: d.date, wins, losses, pct: wins/(wins+losses) });
-      });
-    });
-
-    // Get current division rank history by fetching standings per date (too expensive)
-    // Instead show W/L trend as proxy for rank
+    // Build division rank history from each team's schedule
     const chartCanvasId = `team-rank-chart-${teamId}`;
-    const wlData = rankHistory.map(r=>({ x: r.date, y: r.wins }));
-    const lData  = rankHistory.map(r=>({ x: r.date, y: r.losses }));
-
-    let html = standingsHtml + `
+    let rankChartHtml = `
       <div class="team-standings-section">
-        <div class="summary-title">今季 勝敗推移 / Season W-L Trend</div>
+        <div class="summary-title">地区順位推移 / Division Rank Trend</div>
         <div class="chart-block" style="margin:0">
-          <div class="chart-wrap"><canvas id="${chartCanvasId}"></canvas></div>
+          <div class="chart-wrap" style="height:240px"><canvas id="${chartCanvasId}"></canvas></div>
         </div>
       </div>
     `;
 
+    let html = standingsHtml + rankChartHtml;
     container.innerHTML = html;
 
-    // Draw chart
-    setTimeout(() => {
-      destroyChart(chartCanvasId);
-      const ctx = document.getElementById(chartCanvasId)?.getContext('2d');
-      if (!ctx) return;
-      chartInstances[chartCanvasId] = new Chart(ctx, {
-        type: 'line',
-        data: {
-          datasets: [
-            {
-              label: 'Wins', data: wlData,
-              borderColor: '#22c55e', backgroundColor: '#22c55e22',
-              borderWidth: 2, pointRadius: 3, tension: 0, fill: false,
-              pointStyle: 'circle',
-            },
-            {
-              label: 'Losses', data: lData,
-              borderColor: '#ef4444', backgroundColor: '#ef444422',
-              borderWidth: 2, pointRadius: 3, tension: 0, fill: false,
-              pointStyle: 'triangle',
-            }
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          interaction: { mode:'index', intersect:false },
-          plugins: {
-            legend: { display:true, position:'top', labels:{color:'#e0e6f0',font:{size:12},padding:12,usePointStyle:true} },
-            tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 }
+    // Build rank history: fetch schedule for each team in my division
+    setTimeout(async () => {
+      try {
+        if (!myDivision) return;
+        const divTeams = myDivision.teamRecords || [];
+
+        // For each team, build cumulative W/L history → derive rank per game date
+        const teamHistories = await Promise.all(divTeams.map(async rec => {
+          const tid = rec.team?.id;
+          const dates = await fetchTeamStandingsHistory(tid);
+          let w=0, l=0;
+          const history = [];
+          dates.forEach(d => {
+            d.games?.forEach(game => {
+              if (game.status?.abstractGameState !== 'Final') return;
+              const isHome = game.teams?.home?.team?.id === tid;
+              const myT = isHome ? game.teams?.home : game.teams?.away;
+              if (myT?.isWinner === undefined) return;
+              if (myT.isWinner) w++; else l++;
+              history.push({ date: d.date, w, l, pct: w/(w+l||1) });
+            });
+          });
+          return { teamId: tid, name: rec.team?.name||'?', history };
+        }));
+
+        // Collect all unique dates
+        const allDates = [...new Set(teamHistories.flatMap(th=>th.history.map(h=>h.date)))].sort();
+
+        // For each date, compute rank of each team
+        const rankDataByTeam = teamHistories.map(th => ({ name: th.name, isMyTeam: th.teamId===teamId, data: [] }));
+
+        allDates.forEach(date => {
+          // Get pct of each team up to this date
+          const pctsAtDate = teamHistories.map(th => {
+            const games = th.history.filter(h=>h.date<=date);
+            return games.length ? games[games.length-1].pct : 0;
+          });
+          // Sort descending → rank
+          const sorted = [...pctsAtDate].sort((a,b)=>b-a);
+          pctsAtDate.forEach((pct,i) => {
+            const rank = sorted.indexOf(pct)+1;
+            rankDataByTeam[i].data.push({ x: date, y: rank });
+          });
+        });
+
+        // Draw chart
+        destroyChart(chartCanvasId);
+        const ctx = document.getElementById(chartCanvasId)?.getContext('2d');
+        if (!ctx) return;
+
+        const colors = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#a855f7'];
+        chartInstances[chartCanvasId] = new Chart(ctx, {
+          type: 'line',
+          data: {
+            datasets: rankDataByTeam.map((td, i) => ({
+              label: td.name,
+              data: td.data,
+              borderColor: colors[i % colors.length],
+              backgroundColor: colors[i % colors.length]+'22',
+              borderWidth: td.isMyTeam ? 3 : 1.5,
+              pointRadius: td.isMyTeam ? 4 : 2,
+              pointStyle: td.isMyTeam ? 'circle' : 'circle',
+              tension: 0,
+              fill: false,
+            }))
           },
-          scales: {
-            x: { type:'time', time:{unit:'day',displayFormats:{day:'M/d'}}, ticks:{color:'#6a8aaa',font:{size:11}}, grid:{color:'#1a2a3a'} },
-            y: { ticks:{color:'#6a8aaa',font:{size:12}}, grid:{color:'#1a2a3a'}, title:{display:true,text:'Games',color:'#6a8aaa'} }
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode:'index', intersect:false },
+            plugins: {
+              legend: { display:true, position:'top', labels:{color:'#e0e6f0',font:{size:11},padding:10,usePointStyle:true} },
+              tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 }
+            },
+            scales: {
+              x: { type:'time', time:{unit:'day',displayFormats:{day:'M/d'}}, ticks:{color:'#6a8aaa',font:{size:11},maxRotation:0}, grid:{color:'#1a2a3a'} },
+              y: {
+                reverse: true, // 1位が上
+                min:1, max: divTeams.length,
+                ticks:{ color:'#6a8aaa', font:{size:12}, stepSize:1,
+                  callback: v => `${v}位` },
+                grid:{ color:'#1a2a3a' },
+                title:{ display:true, text:'順位 / Rank', color:'#6a8aaa' }
+              }
+            }
           }
-        }
-      });
+        });
+      } catch(e) {
+        console.error('Division rank chart error:', e);
+      }
     }, 100);
 
   } catch(e) {

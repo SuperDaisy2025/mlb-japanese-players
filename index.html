@@ -247,21 +247,36 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
 .zt-legend-item{display:flex;align-items:center;gap:3px;font-size:9px;color:var(--txt2)}
 .zt-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 
-/* ── ab inning ── */
-.ab-inning{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--txt2);min-width:28px;flex-shrink:0}
+/* ── SVG scatter plot ── */
+.pitch-scatter{display:block;background:var(--bg3);border-radius:6px;border:1px solid var(--border)}
+.pitching-zone-col .pitch-scatter{width:100%}
+.pitch-zone-wrap .pitch-scatter{width:160px;height:180px}
 
-/* ── Team standings by division ── */
-.team-standings-section{padding:14px}
-.standings-division{margin-bottom:14px}
-.standings-div-title{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--txt);text-transform:uppercase;padding:6px 12px;background:var(--bg4);border-radius:var(--r) var(--r) 0 0;border:1px solid var(--border2);border-bottom:none}
-.standings-table{background:var(--bg3);border:1px solid var(--border);border-radius:0 0 var(--rlg) var(--rlg);overflow:hidden}
-.standings-header{display:grid;grid-template-columns:32px 1fr 38px 38px 48px 38px;padding:6px 12px;background:var(--bg2);color:var(--txt3);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
-.standings-row{display:grid;grid-template-columns:32px 1fr 38px 38px 48px 38px;padding:8px 12px;border-top:1px solid var(--border);font-size:13px;font-family:'Barlow Condensed',sans-serif;transition:.15s}
+/* ── Runner diamond ── */
+.ab-runners{display:inline-flex;align-items:center;justify-content:center;margin:0 4px;flex-shrink:0}
+.base-diamond{position:relative;width:24px;height:24px;flex-shrink:0}
+.base{position:absolute;width:7px;height:7px;transform:rotate(45deg);background:var(--border2);border:1px solid var(--border2);transition:.15s}
+.base.on{background:var(--gold);border-color:var(--gold)}
+.b1{right:0;top:50%;transform:translateY(-50%) rotate(45deg)}
+.b2{top:0;left:50%;transform:translateX(-50%) rotate(45deg)}
+.b3{left:0;top:50%;transform:translateY(-50%) rotate(45deg)}
+.base-home{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:7px;height:7px;background:var(--border2);clip-path:polygon(50% 100%,0 0,100% 0)}
+
+/* ── ab outs display ── */
+.ab-outs{font-size:11px;letter-spacing:2px;min-width:28px;flex-shrink:0;color:var(--txt2)}
+
+/* ── Standings design ── */
+.standings-league-title{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;letter-spacing:1px;color:var(--txt);margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--border2)}
+.standings-div-title{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--teal);text-transform:uppercase;padding:7px 14px;background:var(--bg4);border-radius:var(--r) var(--r) 0 0;border:1px solid var(--border2);border-bottom:none}
+.standings-header{display:grid;grid-template-columns:32px 1fr 38px 38px 48px 38px;padding:6px 14px;background:var(--bg2);color:var(--teal);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.standings-row{display:grid;grid-template-columns:32px 1fr 38px 38px 48px 38px;padding:9px 14px;border-top:1px solid var(--border);font-size:13px;font-family:'Barlow Condensed',sans-serif;transition:.15s}
 .standings-row:hover{background:var(--bg4)}
-.standings-row.my-team{background:rgba(59,130,246,.12);border-left:3px solid var(--blue)}
-.standings-row.my-team strong{color:var(--teal)}
-.standings-rank{color:var(--txt3);font-size:12px}
-.standings-team{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.standings-row.my-team{background:rgba(6,182,212,.1);border-left:3px solid var(--teal)}
+.standings-row.my-team strong{color:var(--teal);font-size:14px}
+.standings-rank{color:var(--txt3);font-size:12px;font-weight:700}
+.standings-team{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;color:var(--txt)}
+.standings-w{color:var(--green);font-weight:700}
+.standings-l{color:var(--red);font-weight:700}
 
 /* ── Responsive: mobile ── */
 @media(max-width:640px){
@@ -329,7 +344,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
       <div class="logo-box">MLB</div>
       <div>
         <div class="app-title-text" data-i18n="appTitle">MLB日本人選手</div>
-        <div class="app-version">v10</div>
+        <div class="app-version">v11</div>
       </div>
     </div>
     <div class="header-right">
