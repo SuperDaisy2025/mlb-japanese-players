@@ -292,6 +292,7 @@ function playerCard(p, i) {
 async function openPlayer(playerId) {
   currentPlayer = JAPANESE_PLAYERS.find(p=>p.id===playerId);
   currentPlayerTab = 'summary';
+  window._playsCache = new Map(); // reset cache for new player
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.id==='tab-players'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id==='panel-players'));
   currentTab = 'players';
@@ -691,9 +692,8 @@ async function toggleGamePitching(gamePk, rowEl) {
           </div>
           <div class="pitch-zone-wrap">
             <div class="zone-label">投球コース / Zone</div>
-            ${buildPitchZone(allPitches.map(p=>({
-              pitchData:{coordinates:{pX:p.pX,pZ:p.pZ}},
-              details:{description:p.desc,type:{code:p.typeCode}}
+            ${buildPitchZoneFromData(allPitches.map(p=>({
+              pX: p.pX, pZ: p.pZ, desc: p.desc
             })))}
           </div>
         </div>
