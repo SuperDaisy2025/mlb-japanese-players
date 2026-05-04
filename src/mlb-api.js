@@ -81,6 +81,23 @@ async function fetchPitchData(gamePk, pitcherId) {
   return (data.allPlays || []).filter(p => p.matchup?.pitcher?.id === pitcherId);
 }
 
+// ── Standings ──────────────────────────────────────────────────────────────
+async function fetchStandings(leagueId) {
+  const season = new Date().getFullYear();
+  const res = await fetch(`${MLB_API}/standings?leagueId=${leagueId}&season=${season}&standingsTypes=regularSeason`);
+  const data = await res.json();
+  return data.records || [];
+}
+
+async function fetchTeamStandingsHistory(teamId) {
+  const season = new Date().getFullYear();
+  const start  = `${season}-03-26`;
+  const end    = dateStr(new Date());
+  const res = await fetch(`${MLB_API}/schedule?teamId=${teamId}&startDate=${start}&endDate=${end}&sportId=1&gameType=R`);
+  const data = await res.json();
+  return data.dates || [];
+}
+
 async function fetchGameLinescore(gamePk) {
   try {
     const res = await fetch(`https://statsapi.mlb.com/api/v1/game/${gamePk}/linescore`);
@@ -117,6 +134,25 @@ async function loadStatcastData(playerId, type='batter') {
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
+}
+
+// ── Standings API ──────────────────────────────────────────────────────────
+async function fetchStandings(leagueId) {
+  // leagueId: 103=AL, 104=NL
+  const season = new Date().getFullYear();
+  const res = await fetch(`${MLB_API}/standings?leagueId=${leagueId}&season=${season}&standingsTypes=regularSeason`);
+  const data = await res.json();
+  return data.records || [];
+}
+
+async function fetchTeamStandingsHistory(teamId) {
+  // Use schedule endpoint to build wins/losses over time
+  const season = new Date().getFullYear();
+  const start = `${season}-03-26`;
+  const end = dateStr(new Date());
+  const res = await fetch(`${MLB_API}/schedule?teamId=${teamId}&startDate=${start}&endDate=${end}&sportId=1&hydrate=linescore`);
+  const data = await res.json();
+  return data.dates || [];
 }
 
 function shortResult(event) {

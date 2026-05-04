@@ -12,12 +12,12 @@ let gameLogCache = {};
 
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[MLB v8] App starting...');
+  console.log('[MLB v9] App starting...');
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   setLang(currentLang);
   await switchTab('batting');
   updateLastUpdatedDisplay();
-  console.log('[MLB v8] App ready.');
+  console.log('[MLB v9] App ready.');
 });
 
 // ── Tab switching ─────────────────────────────────────────────────────────
@@ -320,6 +320,7 @@ async function renderPlayerDetail(player) {
         <button class="subtab-btn active" id="stab-summary" onclick="switchPlayerTab('summary')">${t('playerSummary')}</button>
         ${player.isBatter?`<button class="subtab-btn" id="stab-batting-log" onclick="switchPlayerTab('batting-log')">打席詳細</button>`:''}
         ${player.isPitcher?`<button class="subtab-btn" id="stab-pitching-log" onclick="switchPlayerTab('pitching-log')">投球詳細</button>`:''}
+        <button class="subtab-btn" id="stab-team" onclick="switchPlayerTab('team')">チーム成績</button>
       </div>
       <div id="player-subtab-content"><div class="loading-spinner"></div></div>
     </div>
@@ -339,6 +340,7 @@ async function switchPlayerTab(tab) {
   if (tab==='summary')      await renderPlayerSummary(content);
   if (tab==='batting-log')  await renderBattingLog(content);
   if (tab==='pitching-log') await renderPitchingLog(content);
+  if (tab==='team')         await renderTeamStandings(content);
 }
 
 // ── Summary ────────────────────────────────────────────────────────────────
@@ -506,7 +508,7 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
 
   // Get play data from JS Map cache
   const myPlays = (window._playsCache || new Map()).get(String(gamePk)) || [];
-  console.log(`[MLB v8] toggleGameAtBats gamePk=${gamePk}, plays found=${myPlays.length}, cache size=${(window._playsCache||new Map()).size}`);
+  console.log(`[MLB v9] toggleGameAtBats gamePk=${gamePk}, plays found=${myPlays.length}, cache size=${(window._playsCache||new Map()).size}`);
   if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
   let html = `<div class="ab-summary-list">`;
@@ -556,7 +558,61 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
   el.innerHTML = html;
 }
 
-function buildPitchZoneFromData(pitches) {
+function buildPitchZoneLarge(pitches, gamePk) {
+  // Build 3x3 SVG-style zone with large dots
+  const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
+  pitches.forEach(p => {
+    const x = p.pX, z = p.pZ;
+    if (x===null||x===undefined||z===null||z===undefined) return;
+    const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
+    const row = z > 2.83 ? 0 : z < 2.0 ? 2 : 1;
+    const desc = (p.desc||'').toLowerCase();
+    const isStrike = desc.includes('strike')||desc.includes('foul')||desc.includes('swinging');
+    const isHit = desc.includes('play');
+    zones[row][col].push({ num: p.num, isStrike, isHit });
+  });
+
+  let html = `<div class="pitch-zone-large" id="zone-large-${gamePk}">`;
+  // Row labels
+  const rowLabels = ['High','Mid','Low'];
+  const colLabels = ['In','Mid','Out'];
+  for (let row=0; row<3; row++) {
+    for (let col=0; col<3; col++) {
+      const cell = zones[row][col];
+      html += `<div class="zone-cell-large" data-row="${row}" data-col="${col}">`;
+      cell.forEach(p => {
+        const cls = p.isHit?'hit':p.isStrike?'strike':'ball';
+        html += `<span class="zone-dot-large ${cls}" id="zdot-${gamePk}-${p.num}" title="#${p.num}">${p.num}</span>`;
+      });
+      html += `</div>`;
+    }
+  }
+  html += `</div>`;
+  return html;
+}
+
+function highlightZonePitch(gamePk, pitchNum) {
+  // Dim all, highlight the hovered pitch
+  document.querySelectorAll(`[id^="zdot-${gamePk}-"]`).forEach(dot => {
+    dot.style.opacity = '0.25';
+    dot.style.transform = 'scale(1)';
+    dot.style.boxShadow = 'none';
+  });
+  const target = document.getElementById(`zdot-${gamePk}-${pitchNum}`);
+  if (target) {
+    target.style.opacity = '1';
+    target.style.transform = 'scale(1.5)';
+    target.style.boxShadow = '0 0 8px 3px rgba(255,255,255,0.7)';
+  }
+}
+
+function clearZoneHighlight(gamePk) {
+  document.querySelectorAll(`[id^="zdot-${gamePk}-"]`).forEach(dot => {
+    dot.style.opacity = '1';
+    dot.style.transform = 'scale(1)';
+    dot.style.boxShadow = 'none';
+  });
+}
   const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
   pitches.forEach((pitch, i) => {
     const x = pitch.pX, z = pitch.pZ;
@@ -621,12 +677,12 @@ async function toggleGamePitching(gamePk, rowEl) {
   el.innerHTML=`<div class="loading-spinner-sm"></div>`;
 
   try {
-    console.log(`[MLB v8] toggleGamePitching gamePk=${gamePk}, playerId=${currentPlayer?.id}`);
+    console.log(`[MLB v9] toggleGamePitching gamePk=${gamePk}, playerId=${currentPlayer?.id}`);
     const [plays, linescore] = await Promise.all([
       fetchPitchData(gamePk, currentPlayer.id),
       fetchGameLinescore(gamePk),
     ]);
-    console.log(`[MLB v8] pitching plays=${plays.length}`);
+    console.log(`[MLB v9] pitching plays=${plays.length}`);
 
     if (!plays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
@@ -658,34 +714,24 @@ async function toggleGamePitching(gamePk, rowEl) {
       });
     });
 
-    // Build speed/count chart using canvas
+    // Build pitching detail HTML - new layout: charts vertical left, zone sticky right
     const chartId = `pitch-chart-${gamePk}`;
-    const zoneId  = `pitch-zone-p-${gamePk}`;
 
     let html = `
       <div class="pitching-detail-wrap">
-        <div class="pitching-charts-mini">
-          <div class="mini-chart-block">
-            <div class="mini-chart-title">球速推移 / Pitch Speed</div>
-            <div class="mini-chart-wrap"><canvas id="${chartId}-speed"></canvas></div>
-          </div>
-          <div class="mini-chart-block">
-            <div class="mini-chart-title">ボール-ストライク / Count</div>
-            <div class="mini-chart-wrap"><canvas id="${chartId}-count"></canvas></div>
-          </div>
-          <div class="mini-chart-block">
-            <div class="mini-chart-title">アウト数 / Outs</div>
-            <div class="mini-chart-wrap"><canvas id="${chartId}-outs"></canvas></div>
-          </div>
-        </div>
-        <div class="pitching-log-zone-wrap">
-          <div class="pitch-log-left">
+        <div class="pitching-detail-main">
+
+          <!-- Left: scrollable pitch list -->
+          <div class="pitching-list-col">
             <div class="pst-header">
               <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span>
               <span>Batter</span><span>B-S</span><span>${t('outcome')}</span>
             </div>
             ${allPitches.map(p => `
-              <div class="pst-row ${p.isFinal?'final-pitch':''}">
+              <div class="pst-row ${p.isFinal?'final-pitch':''}"
+                   data-pitch-num="${p.num}"
+                   onmouseenter="highlightZonePitch('${gamePk}',${p.num})"
+                   onmouseleave="clearZoneHighlight('${gamePk}')">
                 <span>${p.num}</span>
                 <span>${p.type}</span>
                 <span>${p.speed?p.speed+' mph':'-'}</span>
@@ -697,25 +743,52 @@ async function toggleGamePitching(gamePk, rowEl) {
               </div>
             `).join('')}
           </div>
-          <div class="pitch-zone-wrap">
-            <div class="zone-label">投球コース / Zone</div>
-            ${buildPitchZoneFromData(allPitches.map(p=>({
-              pX: p.pX, pZ: p.pZ, desc: p.desc
-            })))}
+
+          <!-- Right: sticky zone + charts vertical -->
+          <div class="pitching-zone-col">
+            <div class="zone-sticky">
+              <div class="zone-title">投球コース / Zone</div>
+              <div class="zone-legend">
+                <span class="zl-dot strike"></span>Strike
+                <span class="zl-dot ball"></span>Ball
+                <span class="zl-dot hit"></span>In Play
+              </div>
+              ${buildPitchZoneLarge(allPitches, gamePk)}
+            </div>
+
+            <div class="pitching-charts-col">
+              <div class="chart-block">
+                <h3 class="chart-title">球速 / Speed <span class="chart-badge">mph</span></h3>
+                <div class="chart-wrap"><canvas id="${chartId}-speed"></canvas></div>
+              </div>
+              <div class="chart-block">
+                <h3 class="chart-title">カウント / Count</h3>
+                <div class="chart-wrap"><canvas id="${chartId}-count"></canvas></div>
+              </div>
+              <div class="chart-block">
+                <h3 class="chart-title">アウト数 / Outs</h3>
+                <div class="chart-wrap"><canvas id="${chartId}-outs"></canvas></div>
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
     `;
 
     el.innerHTML = html;
 
-    // Draw mini charts
+    // Store pitch data for zone highlight
+    window._pitchZoneData = window._pitchZoneData || {};
+    window._pitchZoneData[gamePk] = allPitches;
+
+    // Draw charts
     setTimeout(() => {
-      const nums   = allPitches.map(p=>p.num);
-      const speeds = allPitches.map(p=>p.speed);
-      const balls  = allPitches.map(p=>p.balls);
-      const strikes= allPitches.map(p=>p.strikes);
-      const outs   = allPitches.map(p=>p.outs);
+      const nums    = allPitches.map(p=>p.num);
+      const speeds  = allPitches.map(p=>p.speed);
+      const balls   = allPitches.map(p=>p.balls);
+      const strikes = allPitches.map(p=>p.strikes);
+      const outs    = allPitches.map(p=>p.outs);
 
       drawMiniLineChart(`${chartId}-speed`, nums, [{label:'Speed (mph)', data:speeds, color:'#ef4444'}], 'mph');
       drawMiniLineChart(`${chartId}-count`, nums, [
@@ -726,7 +799,7 @@ async function toggleGamePitching(gamePk, rowEl) {
     }, 100);
 
   } catch(e) {
-    console.error('[MLB v8] toggleGamePitching error:', e);
+    console.error('[MLB v9] toggleGamePitching error:', e);
     el.innerHTML=`<div class="error-msg">${t('error')}: ${e.message}</div>`;
   }
 }
@@ -763,6 +836,189 @@ function drawMiniLineChart(canvasId, labels, datasets, yLabel) {
       }
     }
   });
+}
+
+// ── Large pitch zone (for pitching detail) ─────────────────────────────────
+function buildPitchZoneLarge(pitches, gamePk) {
+  // Build 3x3 zone with labeled cells and larger dots
+  const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
+  const rowLabels = ['High','Mid','Low'];
+  const colLabels = ['In','Mid','Out'];
+
+  pitches.forEach(p => {
+    const x = p.pX, z = p.pZ;
+    if (x===null||z===null||x===undefined||z===undefined) return;
+    const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
+    const row = z > 2.83  ? 0 : z < 2.0  ? 2 : 1;
+    const desc = (p.desc||'').toLowerCase();
+    const isStrike = desc.includes('strike')||desc.includes('foul')||desc.includes('swinging');
+    const isHit    = desc.includes('play');
+    zones[row][col].push({ num: p.num, isStrike, isHit, type: p.type, speed: p.speed });
+  });
+
+  let html = `<div class="pitch-zone-large" id="zone-large-${gamePk}">`;
+  // Column headers
+  html += `<div class="zone-col-headers"><span></span>${colLabels.map(l=>`<span>${l}</span>`).join('')}</div>`;
+  for (let row=0;row<3;row++) {
+    html += `<div class="zone-large-row">`;
+    html += `<span class="zone-row-label">${rowLabels[row]}</span>`;
+    for (let col=0;col<3;col++) {
+      const isCenter = row===1&&col===1;
+      html += `<div class="zone-large-cell ${isCenter?'zone-center':''}">`;
+      zones[row][col].forEach(p => {
+        const cls = p.isHit?'hit':p.isStrike?'strike':'ball';
+        html += `<span class="zone-dot-lg ${cls}" id="zdot-${gamePk}-${p.num}" title="${p.type}${p.speed?' '+p.speed+'mph':''}">${p.num}</span>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function highlightZonePitch(gamePk, num) {
+  // Dim all, highlight the hovered one
+  document.querySelectorAll(`[id^="zdot-${gamePk}-"]`).forEach(el => {
+    el.classList.add('zone-dot-dim');
+  });
+  const target = document.getElementById(`zdot-${gamePk}-${num}`);
+  if (target) {
+    target.classList.remove('zone-dot-dim');
+    target.classList.add('zone-dot-highlight');
+  }
+}
+
+function clearZoneHighlight(gamePk) {
+  document.querySelectorAll(`[id^="zdot-${gamePk}-"]`).forEach(el => {
+    el.classList.remove('zone-dot-dim','zone-dot-highlight');
+  });
+}
+
+// ── Team Standings ─────────────────────────────────────────────────────────
+async function renderTeamStandings(container) {
+  container.innerHTML = `<div class="loading-spinner"></div>`;
+  try {
+    const player = currentPlayer;
+    const teamId = player.teamId;
+
+    // Determine league (AL=103, NL=104) based on team
+    const alTeams = [108,111,114,117,118,133,136,139,141,142,145,147]; // LAA,BOS,CLE,HOU,KC,OAK,SEA,TB,TOR,MIN,CWS,NYY
+    const leagueId = alTeams.includes(teamId) ? 103 : 104;
+    const leagueName = leagueId===103 ? 'American League' : 'National League';
+
+    // Fetch standings and schedule history in parallel
+    const [standingsRecords, scheduleDates] = await Promise.all([
+      fetchStandings(leagueId),
+      fetchTeamStandingsHistory(teamId),
+    ]);
+
+    // Build standings table
+    let standingsHtml = `
+      <div class="team-standings-section">
+        <div class="summary-title">${leagueName} 順位表</div>
+        <div class="standings-table">
+          <div class="standings-header">
+            <span>Division</span><span>Team</span><span>W</span><span>L</span><span>Pct</span><span>GB</span>
+          </div>
+    `;
+
+    standingsRecords.forEach(division => {
+      const divName = division.division?.nameShort || division.division?.name || '';
+      division.teamRecords?.forEach((rec, idx) => {
+        const isMyTeam = rec.team?.id === teamId;
+        const gb = idx===0 ? '-' : (rec.gamesBack||'-');
+        standingsHtml += `
+          <div class="standings-row ${isMyTeam?'my-team':''}">
+            <span class="standings-div">${idx===0?divName:''}</span>
+            <span class="standings-team">
+              ${isMyTeam?`<strong>${rec.team?.name||''}</strong>`:rec.team?.name||''}
+            </span>
+            <span>${rec.wins??'-'}</span>
+            <span>${rec.losses??'-'}</span>
+            <span>${rec.winningPercentage??'-'}</span>
+            <span>${gb}</span>
+          </div>
+        `;
+      });
+    });
+    standingsHtml += `</div></div>`;
+
+    // Build rank history from schedule
+    // Calculate cumulative W/L and standings position over time
+    let wins=0, losses=0;
+    const rankHistory = [];
+
+    scheduleDates.forEach(d => {
+      d.games?.forEach(game => {
+        if (game.status?.abstractGameState !== 'Final') return;
+        const isHome = game.teams?.home?.team?.id === teamId;
+        const myTeam = isHome ? game.teams?.home : game.teams?.away;
+        const didWin = myTeam?.isWinner;
+        if (didWin===undefined) return;
+        if (didWin) wins++; else losses++;
+        rankHistory.push({ date: d.date, wins, losses, pct: wins/(wins+losses) });
+      });
+    });
+
+    // Get current division rank history by fetching standings per date (too expensive)
+    // Instead show W/L trend as proxy for rank
+    const chartCanvasId = `team-rank-chart-${teamId}`;
+    const wlData = rankHistory.map(r=>({ x: r.date, y: r.wins }));
+    const lData  = rankHistory.map(r=>({ x: r.date, y: r.losses }));
+
+    let html = standingsHtml + `
+      <div class="team-standings-section">
+        <div class="summary-title">今季 勝敗推移 / Season W-L Trend</div>
+        <div class="chart-block" style="margin:0">
+          <div class="chart-wrap"><canvas id="${chartCanvasId}"></canvas></div>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = html;
+
+    // Draw chart
+    setTimeout(() => {
+      destroyChart(chartCanvasId);
+      const ctx = document.getElementById(chartCanvasId)?.getContext('2d');
+      if (!ctx) return;
+      chartInstances[chartCanvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: 'Wins', data: wlData,
+              borderColor: '#22c55e', backgroundColor: '#22c55e22',
+              borderWidth: 2, pointRadius: 3, tension: 0, fill: false,
+              pointStyle: 'circle',
+            },
+            {
+              label: 'Losses', data: lData,
+              borderColor: '#ef4444', backgroundColor: '#ef444422',
+              borderWidth: 2, pointRadius: 3, tension: 0, fill: false,
+              pointStyle: 'triangle',
+            }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode:'index', intersect:false },
+          plugins: {
+            legend: { display:true, position:'top', labels:{color:'#e0e6f0',font:{size:12},padding:12,usePointStyle:true} },
+            tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 }
+          },
+          scales: {
+            x: { type:'time', time:{unit:'day',displayFormats:{day:'M/d'}}, ticks:{color:'#6a8aaa',font:{size:11}}, grid:{color:'#1a2a3a'} },
+            y: { ticks:{color:'#6a8aaa',font:{size:12}}, grid:{color:'#1a2a3a'}, title:{display:true,text:'Games',color:'#6a8aaa'} }
+          }
+        }
+      });
+    }, 100);
+
+  } catch(e) {
+    container.innerHTML = `<div class="error-msg">${t('error')}: ${e.message}</div>`;
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mlb-jp-v8';
+const CACHE_NAME = 'mlb-jp-v9';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

@@ -221,14 +221,48 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
 .zone-dot.ball{background:rgba(59,130,246,.5);color:#fff}
 .zone-dot.hit{background:rgba(245,158,11,.8);color:#000}
 
-/* ── Pitching detail ── */
+/* ── Pitching detail new layout ── */
 .pitching-detail-wrap{padding:8px}
-.pitching-charts-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
-.mini-chart-block{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px}
-.mini-chart-title{font-size:10px;color:var(--txt3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-.mini-chart-wrap{height:100px;position:relative}
-.pitching-log-zone-wrap{display:flex;gap:0;align-items:flex-start}
-.pitch-log-left{flex:1;min-width:0}
+.pitching-detail-main{display:flex;gap:12px;align-items:flex-start}
+.pitching-list-col{flex:1;min-width:0;max-height:600px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r)}
+.pitching-zone-col{width:320px;flex-shrink:0;position:sticky;top:0}
+.pitching-charts-col{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.pitching-charts-col .chart-block{margin:0}
+.pitching-charts-col .chart-wrap{height:180px}
+
+/* ── Zone sticky header ── */
+.zone-sticky{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rlg);padding:12px}
+.zone-title{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--txt2);margin-bottom:8px;text-transform:uppercase}
+.zone-legend{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--txt2);margin-bottom:10px}
+.zl-dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:3px}
+.zl-dot.strike{background:#ef4444}
+.zl-dot.ball{background:#3b82f6}
+.zl-dot.hit{background:#f59e0b}
+
+/* ── Large pitch zone ── */
+.pitch-zone-large{display:flex;flex-direction:column;gap:3px;width:100%}
+.zone-col-headers{display:grid;grid-template-columns:28px repeat(3,1fr);gap:3px;font-size:10px;color:var(--txt3);text-align:center;font-weight:600;padding:0 2px}
+.zone-large-row{display:grid;grid-template-columns:28px repeat(3,1fr);gap:3px}
+.zone-row-label{font-size:9px;color:var(--txt3);font-weight:600;display:flex;align-items:center;justify-content:center}
+.zone-large-cell{min-height:68px;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:3px;padding:4px}
+.zone-large-cell.zone-center{border:2px solid rgba(255,255,255,.15);background:rgba(255,255,255,.03)}
+.zone-dot-lg{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;cursor:pointer;transition:all .15s;border:2px solid transparent;line-height:1}
+.zone-dot-lg.strike{background:#ef4444;color:#fff}
+.zone-dot-lg.ball{background:#3b82f6;color:#fff}
+.zone-dot-lg.hit{background:#f59e0b;color:#000}
+.zone-dot-lg.zone-dot-dim{opacity:.18;transform:scale(.8)}
+.zone-dot-lg.zone-dot-highlight{transform:scale(1.35);box-shadow:0 0 0 3px rgba(255,255,255,.7),0 0 8px rgba(255,255,255,.4);z-index:10;border-color:white}
+
+/* ── Team standings ── */
+.team-standings-section{padding:14px;margin-bottom:12px}
+.standings-table{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rlg);overflow:hidden}
+.standings-header{display:grid;grid-template-columns:80px 1fr 36px 36px 52px 36px;padding:7px 12px;background:var(--bg2);font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px}
+.standings-row{display:grid;grid-template-columns:80px 1fr 36px 36px 52px 36px;padding:7px 12px;border-top:1px solid var(--border);font-size:13px;transition:.15s}
+.standings-row:hover{background:var(--bg4)}
+.standings-row.my-team{background:rgba(59,130,246,.1);border-left:3px solid var(--blue)}
+.standings-div{font-size:10px;color:var(--txt3);font-weight:600}
+.standings-team{font-weight:500}
+.standings-row.my-team .standings-team strong{color:var(--teal)}
 
 /* ── Statcast & Settings buttons ── */
 .btn-statcast{display:flex;align-items:center;gap:4px;padding:6px 12px;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.4);border-radius:20px;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;transition:.2s;white-space:nowrap}
@@ -288,7 +322,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
       <div class="logo-box">MLB</div>
       <div>
         <div class="app-title-text" data-i18n="appTitle">MLB日本人選手</div>
-        <div class="app-version">v8</div>
+        <div class="app-version">v9</div>
       </div>
     </div>
     <div class="header-right">
