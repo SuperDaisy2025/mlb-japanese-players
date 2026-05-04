@@ -455,6 +455,22 @@ async function renderBattingLog(container) {
       const myPlays = plays.filter(p => p.matchup?.batter?.id === currentPlayer.id);
       const abResultsInline = myPlays.map(p => shortResult(p.result?.event)).join(' ');
 
+      // Cache play data in JS Map BEFORE setting innerHTML
+      window._playsCache = window._playsCache || new Map();
+      window._playsCache.set(String(gamePk), myPlays.map(p=>({
+        event: p.result?.event,
+        pitcher: p.matchup?.pitcher?.fullName,
+        pitches: (p.playEvents?.filter(e=>e.isPitch)||[]).map(pitch=>({
+          type: pitch.details?.type?.description,
+          speed: pitch.pitchData?.startSpeed ? Math.round(pitch.pitchData.startSpeed) : null,
+          desc: pitch.details?.description,
+          balls: pitch.count?.balls??0,
+          strikes: pitch.count?.strikes??0,
+          pX: pitch.pitchData?.coordinates?.pX,
+          pZ: pitch.pitchData?.coordinates?.pZ,
+        }))
+      })));
+
       html += `
         <div class="game-log-row" onclick="toggleGameAtBats('${gamePk}',this,${isHome})">
           <span class="gl-date">${game.date?.slice(5)||''}</span>
@@ -471,21 +487,6 @@ async function renderBattingLog(container) {
         </div>
         <div class="game-atbats" id="atbats-${gamePk}" style="display:none"></div>
       `;
-      // Cache play data in JS Map (avoids DOM attribute escaping issues)
-      window._playsCache = window._playsCache || new Map();
-      window._playsCache.set(String(gamePk), myPlays.map(p=>({
-        event: p.result?.event,
-        pitcher: p.matchup?.pitcher?.fullName,
-        pitches: (p.playEvents?.filter(e=>e.isPitch)||[]).map(pitch=>({
-          type: pitch.details?.type?.description,
-          speed: pitch.pitchData?.startSpeed ? Math.round(pitch.pitchData.startSpeed) : null,
-          desc: pitch.details?.description,
-          balls: pitch.count?.balls??0,
-          strikes: pitch.count?.strikes??0,
-          pX: pitch.pitchData?.coordinates?.pX,
-          pZ: pitch.pitchData?.coordinates?.pZ,
-        }))
-      })));
     }
     html += `</div>`;
     container.innerHTML = html;
@@ -562,8 +563,9 @@ function buildPitchZoneFromData(pitches) {
     if (x===undefined||z===undefined||x===null||z===null) return;
     const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
     const row = z > 2.83 ? 0 : z < 2.0 ? 2 : 1;
-    const isStrike = isStrikePitch(pitch.desc||'');
-    const isHit    = (pitch.desc||'').toLowerCase().includes('play');
+    const desc = (pitch.desc||'').toLowerCase();
+    const isStrike = desc.includes('strike') || desc.includes('foul') || desc.includes('swinging');
+    const isHit    = desc.includes('play');
     zones[row][col].push({ num: i+1, isStrike, isHit });
   });
   let html = `<div class="pitch-zone">`;
