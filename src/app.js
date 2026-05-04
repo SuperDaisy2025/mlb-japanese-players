@@ -12,10 +12,12 @@ let gameLogCache = {};
 
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('[MLB v8] App starting...');
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   setLang(currentLang);
   await switchTab('batting');
   updateLastUpdatedDisplay();
+  console.log('[MLB v8] App ready.');
 });
 
 // ── Tab switching ─────────────────────────────────────────────────────────
@@ -503,6 +505,7 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
 
   // Get play data from JS Map cache
   const myPlays = (window._playsCache || new Map()).get(String(gamePk)) || [];
+  console.log(`[MLB v8] toggleGameAtBats gamePk=${gamePk}, plays found=${myPlays.length}, cache size=${(window._playsCache||new Map()).size}`);
   if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
   let html = `<div class="ab-summary-list">`;
@@ -616,10 +619,12 @@ async function toggleGamePitching(gamePk, rowEl) {
   el.innerHTML=`<div class="loading-spinner-sm"></div>`;
 
   try {
+    console.log(`[MLB v8] toggleGamePitching gamePk=${gamePk}, playerId=${currentPlayer?.id}`);
     const [plays, linescore] = await Promise.all([
       fetchPitchData(gamePk, currentPlayer.id),
       fetchGameLinescore(gamePk),
     ]);
+    console.log(`[MLB v8] pitching plays=${plays.length}`);
 
     if (!plays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
@@ -719,7 +724,8 @@ async function toggleGamePitching(gamePk, rowEl) {
     }, 100);
 
   } catch(e) {
-    el.innerHTML=`<div class="error-msg">${t('error')}</div>`;
+    console.error('[MLB v8] toggleGamePitching error:', e);
+    el.innerHTML=`<div class="error-msg">${t('error')}: ${e.message}</div>`;
   }
 }
 

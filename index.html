@@ -37,7 +37,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
 .header-top{display:flex;align-items:center;justify-content:space-between;padding:8px 14px}
 .app-logo{display:flex;align-items:center;gap:8px}
 .logo-box{background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;padding:4px 8px;border-radius:6px;letter-spacing:.5px}
-.app-title-text{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700}
+.app-title-text{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;line-height:1.1}
+.app-version{font-size:10px;color:var(--txt3);font-weight:600;letter-spacing:.5px}
 .header-right{display:flex;align-items:center;gap:8px}
 #last-updated{font-size:11px;color:var(--txt3)}
 .btn-refresh{display:flex;align-items:center;gap:5px;padding:6px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:20px;color:var(--txt);font-size:13px;font-weight:600;cursor:pointer;transition:.2s}
@@ -285,7 +286,10 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
   <div class="header-top">
     <div class="app-logo">
       <div class="logo-box">MLB</div>
-      <div class="app-title-text" data-i18n="appTitle">MLB日本人選手</div>
+      <div>
+        <div class="app-title-text" data-i18n="appTitle">MLB日本人選手</div>
+        <div class="app-version">v8</div>
+      </div>
     </div>
     <div class="header-right">
       <span id="last-updated"></span>
