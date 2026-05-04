@@ -613,6 +613,8 @@ function clearZoneHighlight(gamePk) {
     dot.style.boxShadow = 'none';
   });
 }
+
+function buildPitchZoneFromData(pitches) {
   const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
   pitches.forEach((pitch, i) => {
     const x = pitch.pX, z = pitch.pZ;
