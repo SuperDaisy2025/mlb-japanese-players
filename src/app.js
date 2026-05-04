@@ -12,12 +12,12 @@ let gameLogCache = {};
 
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[MLB v9] App starting...');
+  console.log('[MLB v10] App starting...');
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
   setLang(currentLang);
   await switchTab('batting');
   updateLastUpdatedDisplay();
-  console.log('[MLB v9] App ready.');
+  console.log('[MLB v10] App ready.');
 });
 
 // ── Tab switching ─────────────────────────────────────────────────────────
@@ -462,6 +462,7 @@ async function renderBattingLog(container) {
       window._playsCache.set(String(gamePk), myPlays.map(p=>({
         event: p.result?.event,
         pitcher: p.matchup?.pitcher?.fullName,
+        inning: p.about?.inning,
         pitches: (p.playEvents?.filter(e=>e.isPitch)||[]).map(pitch=>({
           type: pitch.details?.type?.description,
           speed: pitch.pitchData?.startSpeed ? Math.round(pitch.pitchData.startSpeed) : null,
@@ -508,7 +509,7 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
 
   // Get play data from JS Map cache
   const myPlays = (window._playsCache || new Map()).get(String(gamePk)) || [];
-  console.log(`[MLB v9] toggleGameAtBats gamePk=${gamePk}, plays found=${myPlays.length}, cache size=${(window._playsCache||new Map()).size}`);
+  console.log(`[MLB v10] toggleGameAtBats gamePk=${gamePk}, plays found=${myPlays.length}, cache size=${(window._playsCache||new Map()).size}`);
   if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
   let html = `<div class="ab-summary-list">`;
@@ -519,11 +520,12 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
     const last    = pitches[pitches.length-1];
     const balls   = last?.balls ?? 0;
     const strikes = last?.strikes ?? 0;
+    const inning  = play.inning ? `${play.inning}回` : '';
     const abId    = `ab-${gamePk}-${idx}`;
 
     html += `
       <div class="ab-summary-row" onclick="toggleAbDetail('${abId}',this)">
-        <span class="ab-idx">${idx+1}</span>
+        <span class="ab-inning">${inning}</span>
         <span class="ab-result-badge ${getResultClass(play.event)}">${result}</span>
         <span class="ab-count">${balls}-${strikes}</span>
         <span class="ab-pitcher-name">vs ${pitcher}</span>
@@ -537,9 +539,11 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
               <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span><span>B-S</span><span>${t('outcome')}</span>
             </div>
             ${pitches.map((pitch,i)=>`
-              <div class="pitch-row ${i===pitches.length-1?'last-pitch':''}">
+              <div class="pitch-row ${i===pitches.length-1?'last-pitch':''}"
+                   onmouseenter="highlightBatterZonePitch('${abId}',${i})"
+                   onmouseleave="clearBatterZoneHighlight('${abId}')">
                 <span>${i+1}</span>
-                <span>${pitch.type||'-'}</span>
+                <span style="color:${pitchTypeColor(pitch.type)}">${pitch.type||'-'}</span>
                 <span>${pitch.speed ? pitch.speed+' mph' : '-'}</span>
                 <span>${pitch.balls??0}-${pitch.strikes??0}</span>
                 <span class="pitch-desc">${pitchShort(pitch.desc)}</span>
@@ -548,7 +552,7 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
           </div>
           <div class="pitch-zone-wrap">
             <div class="zone-label">Strike Zone</div>
-            ${buildPitchZoneFromData(pitches)}
+            ${buildPitchZoneTyped(pitches, abId, 'bzdot')}
           </div>
         </div>
       </div>
@@ -558,37 +562,76 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
   el.innerHTML = html;
 }
 
-function buildPitchZoneLarge(pitches, gamePk) {
-  // Build 3x3 SVG-style zone with large dots
+function toggleAbDetail(id, rowEl) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const icon = rowEl.querySelector('.ab-arrow');
+  const open = el.style.display === 'block';
+  el.style.display = open ? 'none' : 'block';
+  if (icon) icon.textContent = open ? '▶' : '▼';
+}
+
+function highlightBatterZonePitch(abId, idx) {
+  document.querySelectorAll(`[id^="bzdot-${abId}-"]`).forEach(el => el.classList.add('zone-dot-dim'));
+  const tgt = document.getElementById(`bzdot-${abId}-${idx}`);
+  if (tgt) { tgt.classList.remove('zone-dot-dim'); tgt.classList.add('zone-dot-highlight'); }
+}
+function clearBatterZoneHighlight(abId) {
+  document.querySelectorAll(`[id^="bzdot-${abId}-"]`).forEach(el => el.classList.remove('zone-dot-dim','zone-dot-highlight'));
+}
+
+// ── Pitch type color map ───────────────────────────────────────────────────
+const PITCH_TYPE_COLORS = {
+  '4-Seam Fastball':'#ef4444','Fastball':'#ef4444',
+  '2-Seam Fastball':'#f97316','Sinker':'#f97316',
+  'Cutter':'#f59e0b',
+  'Slider':'#22c55e','Sweeper':'#16a34a',
+  'Curveball':'#3b82f6','Knuckle Curve':'#6366f1',
+  'Changeup':'#a855f7','Splitter':'#ec4899',
+  'Forkball':'#db2777','Knuckleball':'#06b6d4',
+};
+function pitchTypeColor(type) {
+  if (!type) return '#6a8aaa';
+  for (const [key, color] of Object.entries(PITCH_TYPE_COLORS)) {
+    if (type.includes(key)||key.includes(type)) return color;
+  }
+  return '#6a8aaa';
+}
+
+// ── Build pitch zone: small colored dots by pitch type ─────────────────────
+function buildPitchZoneTyped(pitches, zoneId, dotPrefix='zdot') {
   const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
-  pitches.forEach(p => {
-    const x = p.pX, z = p.pZ;
+  pitches.forEach((pitch, i) => {
+    const x = pitch.pX ?? pitch.pitchData?.coordinates?.pX;
+    const z = pitch.pZ ?? pitch.pitchData?.coordinates?.pZ;
     if (x===null||x===undefined||z===null||z===undefined) return;
     const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
-    const row = z > 2.83 ? 0 : z < 2.0 ? 2 : 1;
-    const desc = (p.desc||'').toLowerCase();
-    const isStrike = desc.includes('strike')||desc.includes('foul')||desc.includes('swinging');
-    const isHit = desc.includes('play');
-    zones[row][col].push({ num: p.num, isStrike, isHit });
+    const row = z > 2.83  ? 0 : z < 2.0  ? 2 : 1;
+    const type  = pitch.type || '';
+    const color = pitchTypeColor(type);
+    const isLast = i === pitches.length-1;
+    zones[row][col].push({ idx:i, color, type, isLast });
   });
-
-  let html = `<div class="pitch-zone-large" id="zone-large-${gamePk}">`;
-  // Row labels
-  const rowLabels = ['High','Mid','Low'];
-  const colLabels = ['In','Mid','Out'];
-  for (let row=0; row<3; row++) {
-    for (let col=0; col<3; col++) {
-      const cell = zones[row][col];
-      html += `<div class="zone-cell-large" data-row="${row}" data-col="${col}">`;
-      cell.forEach(p => {
-        const cls = p.isHit?'hit':p.isStrike?'strike':'ball';
-        html += `<span class="zone-dot-large ${cls}" id="zdot-${gamePk}-${p.num}" title="#${p.num}">${p.num}</span>`;
+  const rowLabels = ['Hi','Mid','Lo'];
+  let html = `<div class="pzone-wrap">`;
+  html += `<div class="pzone-col-hdr"><span></span><span>In</span><span>Mid</span><span>Out</span></div>`;
+  for (let row=0;row<3;row++) {
+    html += `<div class="pzone-row"><span class="pzone-rlbl">${rowLabels[row]}</span>`;
+    for (let col=0;col<3;col++) {
+      html += `<div class="pzone-cell${row===1&&col===1?' pzone-center':''}">`;
+      zones[row][col].forEach(p => {
+        html += `<span class="pzdot${p.isLast?' pzdot-last':''}" id="${dotPrefix}-${zoneId}-${p.idx}" style="background:${p.color}" title="${p.type}"></span>`;
       });
       html += `</div>`;
     }
+    html += `</div>`;
   }
   html += `</div>`;
   return html;
+}
+
+function buildPitchZoneLarge(pitches, gamePk) {
+  return buildPitchZoneTyped(pitches, gamePk, 'zdot');
 }
 
 function highlightZonePitch(gamePk, pitchNum) {
@@ -679,12 +722,12 @@ async function toggleGamePitching(gamePk, rowEl) {
   el.innerHTML=`<div class="loading-spinner-sm"></div>`;
 
   try {
-    console.log(`[MLB v9] toggleGamePitching gamePk=${gamePk}, playerId=${currentPlayer?.id}`);
+    console.log(`[MLB v10] toggleGamePitching gamePk=${gamePk}, playerId=${currentPlayer?.id}`);
     const [plays, linescore] = await Promise.all([
       fetchPitchData(gamePk, currentPlayer.id),
       fetchGameLinescore(gamePk),
     ]);
-    console.log(`[MLB v9] pitching plays=${plays.length}`);
+    console.log(`[MLB v10] pitching plays=${plays.length}`);
 
     if (!plays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
@@ -721,9 +764,9 @@ async function toggleGamePitching(gamePk, rowEl) {
 
     let html = `
       <div class="pitching-detail-wrap">
-        <div class="pitching-detail-main">
 
-          <!-- Left: scrollable pitch list -->
+        <!-- Top: list (left) + zone (right) -->
+        <div class="pitching-top-row">
           <div class="pitching-list-col">
             <div class="pst-header">
               <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span>
@@ -731,11 +774,10 @@ async function toggleGamePitching(gamePk, rowEl) {
             </div>
             ${allPitches.map(p => `
               <div class="pst-row ${p.isFinal?'final-pitch':''}"
-                   data-pitch-num="${p.num}"
-                   onmouseenter="highlightZonePitch('${gamePk}',${p.num})"
+                   onmouseenter="highlightZonePitch('${gamePk}',${p.num-1})"
                    onmouseleave="clearZoneHighlight('${gamePk}')">
                 <span>${p.num}</span>
-                <span>${p.type}</span>
+                <span style="color:${pitchTypeColor(p.type)}">${p.type}</span>
                 <span>${p.speed?p.speed+' mph':'-'}</span>
                 <span class="batter-cell">${p.batter}</span>
                 <span>${p.balls}-${p.strikes}</span>
@@ -746,35 +788,31 @@ async function toggleGamePitching(gamePk, rowEl) {
             `).join('')}
           </div>
 
-          <!-- Right: sticky zone + charts vertical -->
           <div class="pitching-zone-col">
             <div class="zone-sticky">
               <div class="zone-title">投球コース / Zone</div>
-              <div class="zone-legend">
-                <span class="zl-dot strike"></span>Strike
-                <span class="zl-dot ball"></span>Ball
-                <span class="zl-dot hit"></span>In Play
-              </div>
+              <div class="zone-type-legend" id="zone-legend-${gamePk}"></div>
               ${buildPitchZoneLarge(allPitches, gamePk)}
             </div>
-
-            <div class="pitching-charts-col">
-              <div class="chart-block">
-                <h3 class="chart-title">球速 / Speed <span class="chart-badge">mph</span></h3>
-                <div class="chart-wrap"><canvas id="${chartId}-speed"></canvas></div>
-              </div>
-              <div class="chart-block">
-                <h3 class="chart-title">カウント / Count</h3>
-                <div class="chart-wrap"><canvas id="${chartId}-count"></canvas></div>
-              </div>
-              <div class="chart-block">
-                <h3 class="chart-title">アウト数 / Outs</h3>
-                <div class="chart-wrap"><canvas id="${chartId}-outs"></canvas></div>
-              </div>
-            </div>
           </div>
-
         </div>
+
+        <!-- Bottom: full-width charts -->
+        <div class="pitching-charts-fullwidth">
+          <div class="chart-block">
+            <h3 class="chart-title">球速推移 / Speed <span class="chart-badge">mph</span></h3>
+            <div class="chart-wrap"><canvas id="${chartId}-speed"></canvas></div>
+          </div>
+          <div class="chart-block">
+            <h3 class="chart-title">カウント推移 / Count</h3>
+            <div class="chart-wrap"><canvas id="${chartId}-count"></canvas></div>
+          </div>
+          <div class="chart-block">
+            <h3 class="chart-title">アウト数 / Outs</h3>
+            <div class="chart-wrap"><canvas id="${chartId}-outs"></canvas></div>
+          </div>
+        </div>
+
       </div>
     `;
 
@@ -798,10 +836,20 @@ async function toggleGamePitching(gamePk, rowEl) {
         {label:'Strikes', data:strikes, color:'#ef4444'},
       ], '');
       drawMiniLineChart(`${chartId}-outs`, nums, [{label:'Outs', data:outs, color:'#f59e0b'}], '');
+
+      // Build pitch type legend
+      const typesSeen = {};
+      allPitches.forEach(p => { if(p.type&&p.type!=='-') typesSeen[p.type]=pitchTypeColor(p.type); });
+      const legendEl = document.getElementById(`zone-legend-${gamePk}`);
+      if (legendEl) {
+        legendEl.innerHTML = Object.entries(typesSeen).map(([type,color])=>
+          `<span class="zt-legend-item"><span class="zt-dot" style="background:${color}"></span>${type}</span>`
+        ).join('');
+      }
     }, 100);
 
   } catch(e) {
-    console.error('[MLB v9] toggleGamePitching error:', e);
+    console.error('[MLB v10] toggleGamePitching error:', e);
     el.innerHTML=`<div class="error-msg">${t('error')}: ${e.message}</div>`;
   }
 }
@@ -915,27 +963,26 @@ async function renderTeamStandings(container) {
       fetchTeamStandingsHistory(teamId),
     ]);
 
-    // Build standings table
-    let standingsHtml = `
-      <div class="team-standings-section">
-        <div class="summary-title">${leagueName} 順位表</div>
-        <div class="standings-table">
-          <div class="standings-header">
-            <span>Division</span><span>Team</span><span>W</span><span>L</span><span>Pct</span><span>GB</span>
-          </div>
-    `;
+    // Build standings table - grouped by division
+    let standingsHtml = `<div class="team-standings-section"><div class="summary-title">${leagueName} 順位表</div>`;
 
     standingsRecords.forEach(division => {
-      const divName = division.division?.nameShort || division.division?.name || '';
+      const divName = division.division?.name || '';
+      standingsHtml += `
+        <div class="standings-division">
+          <div class="standings-div-title">${divName}</div>
+          <div class="standings-table">
+            <div class="standings-header">
+              <span>順位</span><span>チーム</span><span>W</span><span>L</span><span>Pct</span><span>GB</span>
+            </div>
+      `;
       division.teamRecords?.forEach((rec, idx) => {
         const isMyTeam = rec.team?.id === teamId;
         const gb = idx===0 ? '-' : (rec.gamesBack||'-');
         standingsHtml += `
           <div class="standings-row ${isMyTeam?'my-team':''}">
-            <span class="standings-div">${idx===0?divName:''}</span>
-            <span class="standings-team">
-              ${isMyTeam?`<strong>${rec.team?.name||''}</strong>`:rec.team?.name||''}
-            </span>
+            <span class="standings-rank">${idx+1}</span>
+            <span class="standings-team">${isMyTeam?`<strong>${rec.team?.name||''}</strong>`:rec.team?.name||''}</span>
             <span>${rec.wins??'-'}</span>
             <span>${rec.losses??'-'}</span>
             <span>${rec.winningPercentage??'-'}</span>
@@ -943,8 +990,9 @@ async function renderTeamStandings(container) {
           </div>
         `;
       });
+      standingsHtml += `</div></div>`;
     });
-    standingsHtml += `</div></div>`;
+    standingsHtml += `</div>`;
 
     // Build rank history from schedule
     // Calculate cumulative W/L and standings position over time
