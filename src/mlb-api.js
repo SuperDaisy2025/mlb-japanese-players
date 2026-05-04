@@ -36,6 +36,14 @@ function teamLogoUrl(teamAbbr) {
   return ids[teamAbbr] ? `https://www.mlbstatic.com/team-logos/${ids[teamAbbr]}.svg` : '';
 }
 
+// Returns full <img> tag with Padres-specific brightness class
+function teamLogoImg(teamAbbr, cls='team-logo-sm') {
+  const url = teamLogoUrl(teamAbbr);
+  if (!url) return '';
+  const extra = teamAbbr === 'SD' ? ' logo-padres' : '';
+  return `<img class="${cls}${extra}" src="${url}" onerror="this.style.display='none'">`;
+}
+
 function playerName(p) { return currentLang === 'ja' ? p.nameJa : p.nameEn; }
 
 const POINT_STYLES = ['circle','triangle','rect','rectRot','star','cross','crossRot','dash','circle','triangle','rect','rectRot','star','cross','crossRot'];

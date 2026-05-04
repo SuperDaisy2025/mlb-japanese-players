@@ -236,8 +236,9 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
 .btn-settings{width:32px;height:32px;background:var(--bg3);border:1px solid var(--border2);border-radius:50%;color:var(--txt2);font-size:14px;cursor:pointer;transition:.2s}
 .btn-settings:hover{color:var(--txt);border-color:var(--border2)}
 
-/* ── Team logo brightness fix (Padres dark logo) ── */
-.team-logo-sm,.team-logo-md,.psc-logo,.pf-logo{filter:brightness(1.3) drop-shadow(0 0 1px rgba(255,255,255,.1))}
+/* ── Team logo brightness (Padres logo is very dark) ── */
+.team-logo-sm,.team-logo-md,.psc-logo,.pf-logo{filter:brightness(1.1)}
+.logo-padres{filter:brightness(2.5) saturate(1.2) !important}
 
 /* ── Game log: compact layout with ab results inline ── */
 .game-log-row{display:flex;align-items:center;gap:6px;padding:7px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:.15s;font-size:12px;min-height:36px;flex-wrap:nowrap}

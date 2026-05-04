@@ -44,7 +44,7 @@ function buildPlayerFilter(players, selectedSet, onChange) {
         ${players.map(p => `
           <label class="pf-chip ${selectedSet.has(p.id)?'active':''}" data-id="${p.id}">
             <input type="checkbox" ${selectedSet.has(p.id)?'checked':''} onchange="${onChange}(${p.id},this.checked)">
-            <img class="pf-logo" src="${teamLogoUrl(p.team)}" onerror="this.style.display='none'">
+            ${teamLogoImg(p.team,'pf-logo')}
             <span>${currentLang==='ja'?p.nameJa:p.nameEn}</span>
           </label>
         `).join('')}
@@ -90,7 +90,7 @@ async function renderBattingOverview() {
         <div class="stat-card ${i===0?'leader':''}" onclick="openPlayer(${r.player.id})">
           <div class="stat-card-header">
             <div class="team-logo-wrap">
-              <img class="team-logo-sm" src="${teamLogoUrl(r.player.team)}" onerror="this.style.display='none'">
+              ${teamLogoImg(r.player.team,'team-logo-sm')}
             </div>
             <div class="stat-card-name">
               <div class="name-ja">${r.player.nameJa}</div>
@@ -185,7 +185,7 @@ async function renderPitchingOverview() {
       <div class="stat-card ${i===0?'leader':''}" onclick="openPlayer(${r.player.id})">
         <div class="stat-card-header">
           <div class="team-logo-wrap">
-            <img class="team-logo-sm" src="${teamLogoUrl(r.player.team)}" onerror="this.style.display='none'">
+            ${teamLogoImg(r.player.team,'team-logo-sm')}
           </div>
           <div class="stat-card-name">
             <div class="name-ja">${r.player.nameJa}</div>
@@ -281,7 +281,7 @@ function renderPlayersTab() {
 function playerCard(p, i) {
   return `
     <div class="player-select-card" onclick="openPlayer(${p.id})" style="--accent:${PLAYER_COLORS[i%PLAYER_COLORS.length]}">
-      <img class="psc-logo" src="${teamLogoUrl(p.team)}" onerror="this.style.display='none'">
+      ${teamLogoImg(p.team,'psc-logo')}
       <div class="psc-number">#${p.number}</div>
       <div class="psc-ja">${p.nameJa}</div>
       <div class="psc-en">${p.nameEn}</div>
@@ -307,7 +307,7 @@ async function renderPlayerDetail(player) {
     <div class="player-detail">
       <div class="player-detail-header" style="border-left:4px solid ${color}">
         <button class="back-btn" onclick="backToPlayers()">← ${currentLang==='ja'?'戻る':'Back'}</button>
-        <img class="team-logo-md" src="${teamLogoUrl(player.team)}" onerror="this.style.display='none'">
+        ${teamLogoImg(player.team,'team-logo-md')}
         <div>
           <div class="player-detail-ja">${player.nameJa}</div>
           <div class="player-detail-en">${player.nameEn} · ${player.team} · #${player.number} · ${player.pos.join('/')}</div>
@@ -466,20 +466,23 @@ async function renderBattingLog(container) {
           <span class="gl-ab-inline">${abResultsInline}</span>
           <span class="gl-arrow">▶</span>
         </div>
-        <div class="game-atbats" id="atbats-${gamePk}" style="display:none" data-plays='${JSON.stringify(myPlays.map(p=>({
-          event: p.result?.event,
-          pitcher: p.matchup?.pitcher?.fullName,
-          pitches: (p.playEvents?.filter(e=>e.isPitch)||[]).map(pitch=>({
-            type: pitch.details?.type?.description,
-            speed: pitch.pitchData?.startSpeed ? Math.round(pitch.pitchData.startSpeed) : null,
-            desc: pitch.details?.description,
-            balls: pitch.count?.balls??0,
-            strikes: pitch.count?.strikes??0,
-            pX: pitch.pitchData?.coordinates?.pX,
-            pZ: pitch.pitchData?.coordinates?.pZ,
-          }))
-        }))).replace(/'/g,"&#39;")}'></div>
+        <div class="game-atbats" id="atbats-${gamePk}" style="display:none"></div>
       `;
+      // Cache play data in JS Map (avoids DOM attribute escaping issues)
+      window._playsCache = window._playsCache || new Map();
+      window._playsCache.set(String(gamePk), myPlays.map(p=>({
+        event: p.result?.event,
+        pitcher: p.matchup?.pitcher?.fullName,
+        pitches: (p.playEvents?.filter(e=>e.isPitch)||[]).map(pitch=>({
+          type: pitch.details?.type?.description,
+          speed: pitch.pitchData?.startSpeed ? Math.round(pitch.pitchData.startSpeed) : null,
+          desc: pitch.details?.description,
+          balls: pitch.count?.balls??0,
+          strikes: pitch.count?.strikes??0,
+          pX: pitch.pitchData?.coordinates?.pX,
+          pZ: pitch.pitchData?.coordinates?.pZ,
+        }))
+      })));
     }
     html += `</div>`;
     container.innerHTML = html;
@@ -497,12 +500,8 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
   el.style.display='block';
   if(icon) icon.textContent='▼';
 
-  // Data embedded in data-plays attribute
-  let myPlays = [];
-  try {
-    myPlays = JSON.parse(el.getAttribute('data-plays') || '[]');
-  } catch(e) { myPlays = []; }
-
+  // Get play data from JS Map cache
+  const myPlays = (window._playsCache || new Map()).get(String(gamePk)) || [];
   if (!myPlays.length) { el.innerHTML=`<div class="no-data-sm">${t('noData')}</div>`; return; }
 
   let html = `<div class="ab-summary-list">`;
@@ -631,6 +630,7 @@ async function toggleGamePitching(gamePk, rowEl) {
       const pitches = play.playEvents?.filter(e=>e.isPitch)||[];
       pitches.forEach((pitch, i) => {
         pitchCount++;
+        const isFinal = i===pitches.length-1;
         allPitches.push({
           num: pitchCount,
           type: pitch.details?.type?.description||'-',
@@ -641,8 +641,8 @@ async function toggleGamePitching(gamePk, rowEl) {
           strikes: pitch.count?.strikes??0,
           outs: pitch.count?.outs??0,
           batter,
-          isFinal: i===pitches.length-1,
-          finalEvent: isFinal && i===pitches.length-1 ? play.result?.event : null,
+          isFinal,
+          finalEvent: isFinal ? play.result?.event : null,
           pX: pitch.pitchData?.coordinates?.pX,
           pZ: pitch.pitchData?.coordinates?.pZ,
           inning: play.about?.inning,
