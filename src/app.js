@@ -654,8 +654,9 @@ function buildPitchZoneTyped(pitches, zoneId, dotPrefix='zdot') {
   pitches.forEach((pitch,i) => {
     const x=pitch.pX??pitch.pitchData?.coordinates?.pX;
     const z=pitch.pZ??pitch.pitchData?.coordinates?.pZ;
-    if(x==null||z==null) return;
-    const cx=toSvgX(x).toFixed(1), cy=toSvgY(z).toFixed(1);
+    if(x==null||z==null||isNaN(parseFloat(x))||isNaN(parseFloat(z))) return;
+    const cx=parseFloat(toSvgX(x).toFixed(1));
+    const cy=parseFloat(toSvgY(z).toFixed(1));
     if(cx<-15||cx>W+15||cy<-15||cy>H+15) return;
     const type=pitch.type||pitch.details?.type?.description||'';
     const color=pitchTypeColor(type);
@@ -672,7 +673,10 @@ function buildPitchZoneTyped(pitches, zoneId, dotPrefix='zdot') {
   return svg;
 }
 
-function buildPitchZoneLarge(pitches, gamePk) { return buildPitchZoneTyped(pitches, gamePk, 'zdot'); }
+function buildPitchZoneLarge(pitches, gamePk) {
+  console.log(`[MLB v11] buildPitchZoneLarge called: ${pitches.length} pitches, gamePk=${gamePk}`);
+  return buildPitchZoneTyped(pitches, gamePk, 'zdot');
+}
 function buildPitchZoneFromData(pitches)       { return buildPitchZoneTyped(pitches, 'batter', 'bzdot'); }
 
 function highlightScatterDot(prefix, zoneId, idx, origR) {
@@ -863,12 +867,25 @@ async function toggleGamePitching(gamePk, rowEl) {
         return valid.length ? Math.round(valid.reduce((a,b)=>a+b,0)/valid.length*10)/10 : null;
       });
 
+      // Inning boundary annotations - yellow vertical lines
       const inningAnnotations = {};
       inningLines.forEach(il => {
         inningAnnotations[`inning${il.inning}`] = {
-          type:'line', xMin:il.num-.5, xMax:il.num-.5,
-          borderColor:'rgba(255,255,255,.2)', borderWidth:1, borderDash:[4,4],
-          label:{content:`${il.inning}回`,display:true,color:'rgba(255,255,255,.4)',font:{size:9},position:'start'}
+          type: 'line',
+          xMin: il.num - 0.5,
+          xMax: il.num - 0.5,
+          borderColor: 'rgba(255, 230, 0, 0.7)',
+          borderWidth: 1.5,
+          borderDash: [],
+          label: {
+            content: `${il.inning}回`,
+            display: true,
+            color: 'rgba(255, 230, 0, 0.9)',
+            font: { size: 10, weight: 'bold' },
+            position: 'end',
+            yAdjust: 6,
+            backgroundColor: 'transparent',
+          }
         };
       });
 
@@ -929,7 +946,7 @@ function drawMiniLineChart(canvasId, labels, datasets, yLabel, annotations={}) {
       plugins: {
         legend: { display: datasets.length>1, position:'top', labels:{color:'#8ba3be',font:{size:10},padding:8,usePointStyle:true} },
         tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 },
-        annotation: Object.keys(annotations).length ? { annotations } : undefined,
+        annotation: { annotations: annotations || {} },
       },
       scales: {
         x: { ticks:{color:'#6a8aaa',font:{size:10}}, grid:{color:'#1a2a3a'}, title:{display:true,text:'Pitch #',color:'#4a6278',font:{size:10}} },
@@ -1008,24 +1025,41 @@ async function renderTeamStandings(container) {
     const leagueId = alTeams.includes(teamId) ? 103 : 104;
     const leagueName = leagueId===103 ? 'American League' : 'National League';
 
-    // Fetch standings and schedule history in parallel
-    const [standingsRecords, scheduleDates] = await Promise.all([
+    const [standingsRecords] = await Promise.all([
       fetchStandings(leagueId),
-      fetchTeamStandingsHistory(teamId),
     ]);
+    const scheduleDates = await fetchTeamStandingsHistory(teamId);
+
+    console.log('[MLB v11c] standings divisions:', standingsRecords.map(d=>({
+      divisionName: d.division?.name,
+      divisionId: d.division?.id,
+      teams: d.teamRecords?.length
+    })));
 
     // Build standings table - grouped by division
     let myDivision = null;
     let standingsHtml = `<div class="team-standings-section"><div class="standings-league-title">${leagueName}</div>`;
 
     standingsRecords.forEach(division => {
-      const divName = division.division?.name || '';
+      // MLB API returns division info in multiple possible locations
+      const divName = division.division?.name 
+        || division.division?.nameShort
+        || division.divisionRecords?.[0]?.division?.name
+        || `Division ${division.division?.id || ''}`;
       const hasMyTeam = division.teamRecords?.some(r => r.team?.id === teamId);
       if (hasMyTeam) myDivision = division;
 
+      // Map division IDs to readable names as fallback
+      const divId = division.division?.id;
+      const divNameMap = {
+        200: 'AL West', 201: 'AL East', 202: 'AL Central',
+        203: 'NL West', 204: 'NL East', 205: 'NL Central',
+      };
+      const displayDivName = divName || divNameMap[divId] || `Division ${divId||''}`;
+
       standingsHtml += `
         <div class="standings-division">
-          <div class="standings-div-title">${divName}</div>
+          <div class="standings-div-title">${displayDivName}</div>
           <div class="standings-table">
             <div class="standings-header">
               <span>順位</span><span>チーム</span><span>W</span><span>L</span><span>Pct</span><span>GB</span>
