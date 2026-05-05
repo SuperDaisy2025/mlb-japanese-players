@@ -358,11 +358,11 @@ async function renderPlayerSummary(container) {
         <div class="summary-section">
           <div class="summary-title">${t('asBatter')}</div>
           <div class="summary-grid-stats">
-            ${sr('AVG', hitStat.avg)}${sr('OBP', hitStat.obp)}${sr('SLG', hitStat.slg)}
-            ${sr('OPS', hitStat.ops)}${sr('HR', hitStat.homeRuns)}${sr('RBI', hitStat.rbi)}
-            ${sr('H', hitStat.hits)}${sr('AB', hitStat.atBats)}${sr('G', hitStat.gamesPlayed)}
-            ${sr('R', hitStat.runs)}${sr('2B', hitStat.doubles)}${sr('3B', hitStat.triples)}
-            ${sr('BB', hitStat.baseOnBalls)}${sr('SO', hitStat.strikeOuts)}${sr('SB', hitStat.stolenBases)}
+            ${sr('AVG','打率',hitStat.avg)}${sr('OBP','出塁率',hitStat.obp)}${sr('SLG','長打率',hitStat.slg)}
+            ${sr('OPS','OPS',hitStat.ops)}${sr('HR','本塁打',hitStat.homeRuns)}${sr('RBI','打点',hitStat.rbi)}
+            ${sr('H','安打',hitStat.hits)}${sr('AB','打数',hitStat.atBats)}${sr('G','試合',hitStat.gamesPlayed)}
+            ${sr('R','得点',hitStat.runs)}${sr('2B','二塁打',hitStat.doubles)}${sr('3B','三塁打',hitStat.triples)}
+            ${sr('BB','四球',hitStat.baseOnBalls)}${sr('SO','三振',hitStat.strikeOuts)}${sr('SB','盗塁',hitStat.stolenBases)}
           </div>
         </div>`;
     }
@@ -372,31 +372,32 @@ async function renderPlayerSummary(container) {
         <div class="summary-section">
           <div class="summary-title">${t('asPitcher')}</div>
           <div class="summary-grid-stats">
-            ${sr('W-L', `${pitchStat.wins??0}-${pitchStat.losses??0}`)}${sr('ERA', pitchStat.era)}${sr('WHIP', pitchStat.whip)}
-            ${sr('K', pitchStat.strikeOuts)}${sr('IP', pitchStat.inningsPitched)}${sr('G', pitchStat.gamesPlayed)}
-            ${sr('GS', pitchStat.gamesStarted)}${sr('BB', pitchStat.baseOnBalls)}${sr('H', pitchStat.hits)}
-            ${sr('HR', pitchStat.homeRuns)}${sr('K/9', pitchStat.strikeoutsPer9Inn)}${sr('BB/9', pitchStat.walksPer9Inn)}
+            ${sr('W-L','勝敗',`${pitchStat.wins??0}-${pitchStat.losses??0}`)}${sr('ERA','防御率',pitchStat.era)}${sr('WHIP','WHIP',pitchStat.whip)}
+            ${sr('K','奪三振',pitchStat.strikeOuts)}${sr('IP','投球回',pitchStat.inningsPitched)}${sr('G','登板',pitchStat.gamesPlayed)}
+            ${sr('GS','先発',pitchStat.gamesStarted)}${sr('BB','四球',pitchStat.baseOnBalls)}${sr('H','被安打',pitchStat.hits)}
+            ${sr('HR','被本塁打',pitchStat.homeRuns)}${sr('K/9','K/9',pitchStat.strikeoutsPer9Inn)}${sr('BB/9','BB/9',pitchStat.walksPer9Inn)}
           </div>
         </div>`;
     }
 
     html += `</div>`;
 
-    // Statcast
+    // Statcast - no button, use top-right button
     const sc = await loadStatcastData(currentPlayer.id, currentPlayer.isPitcher?'pitcher':'batter');
     html += `<div class="statcast-section">
       <div class="summary-title">Statcast <span class="badge-sc">Advanced</span></div>`;
     if (sc) {
       html += `<div class="summary-grid-stats">
-        ${sc.exit_velocity?sr('Exit Velo', sc.exit_velocity+' mph'):''}
-        ${sc.launch_angle?sr('Launch Angle', sc.launch_angle+'°'):''}
-        ${sc.hard_hit_pct?sr('Hard Hit%', sc.hard_hit_pct+'%'):''}
-        ${sc.xba?sr('xBA', sc.xba):''}${sc.xslg?sr('xSLG', sc.xslg):''}
-        ${sc.whiff_rate?sr('Whiff%', sc.whiff_rate+'%'):''}
-        ${sc.zone_pct?sr('Zone%', sc.zone_pct+'%'):''}
+        ${sc.exit_velocity?sr('Exit Velo','打球速度',sc.exit_velocity+' mph'):''}
+        ${sc.launch_angle?sr('Launch Angle','打球角度',sc.launch_angle+'°'):''}
+        ${sc.hard_hit_pct?sr('Hard Hit%','強打率',sc.hard_hit_pct+'%'):''}
+        ${sc.xba?sr('xBA','期待打率',sc.xba):''}
+        ${sc.xslg?sr('xSLG','期待長打率',sc.xslg):''}
+        ${sc.whiff_rate?sr('Whiff%','空振率',sc.whiff_rate+'%'):''}
+        ${sc.zone_pct?sr('Zone%','ゾーン率',sc.zone_pct+'%'):''}
       </div>`;
     } else {
-      html += `<p class="statcast-note">${currentLang==='ja'?'右上の「Statcast更新」ボタンでデータを取得できます。':'Use the "Statcast" button in the top right to fetch data.'}</p>`;
+      html += `<p class="statcast-note">${currentLang==='ja'?'右上の📡Statcastボタンでデータを更新できます。':'Use the 📡 Statcast button (top right) to fetch data.'}</p>`;
     }
     html += `</div>`;
 
@@ -406,9 +407,12 @@ async function renderPlayerSummary(container) {
   }
 }
 
-function sr(label, value) {
+function sr(label, jaLabel, value) {
+  // Support both sr(label, value) and sr(label, jaLabel, value)
+  if (value === undefined) { value = jaLabel; jaLabel = ''; }
   if (value===undefined||value===null) return '';
-  return `<div class="sr-item"><span class="sr-lbl">${label}</span><span class="sr-val">${value}</span></div>`;
+  const subLabel = jaLabel ? `<span class="sr-ja">${jaLabel}</span>` : '';
+  return `<div class="sr-item"><span class="sr-lbl">${label}${subLabel}</span><span class="sr-val">${value}</span></div>`;
 }
 
 // ── Batting log ────────────────────────────────────────────────────────────
@@ -868,24 +872,20 @@ async function toggleGamePitching(gamePk, rowEl) {
       });
 
       // Inning boundary annotations - yellow vertical lines
-      const inningAnnotations = {};
+      // Always show 1回 at pitch 1
+      const inningAnnotations = {
+        inning1_start: {
+          type: 'line', xMin: 0.5, xMax: 0.5,
+          borderColor: 'rgba(255,230,0,.7)', borderWidth: 1.5,
+          label: { content:'1回', display:true, color:'rgba(255,230,0,.9)', font:{size:10,weight:'bold'}, position:'end', yAdjust:6, backgroundColor:'transparent' }
+        }
+      };
       inningLines.forEach(il => {
         inningAnnotations[`inning${il.inning}`] = {
           type: 'line',
-          xMin: il.num - 0.5,
-          xMax: il.num - 0.5,
-          borderColor: 'rgba(255, 230, 0, 0.7)',
-          borderWidth: 1.5,
-          borderDash: [],
-          label: {
-            content: `${il.inning}回`,
-            display: true,
-            color: 'rgba(255, 230, 0, 0.9)',
-            font: { size: 10, weight: 'bold' },
-            position: 'end',
-            yAdjust: 6,
-            backgroundColor: 'transparent',
-          }
+          xMin: il.num - 0.5, xMax: il.num - 0.5,
+          borderColor: 'rgba(255,230,0,.7)', borderWidth: 1.5,
+          label: { content:`${il.inning}回`, display:true, color:'rgba(255,230,0,.9)', font:{size:10,weight:'bold'}, position:'end', yAdjust:6, backgroundColor:'transparent' }
         };
       });
 
@@ -956,62 +956,13 @@ function drawMiniLineChart(canvasId, labels, datasets, yLabel, annotations={}) {
   });
 }
 
-// ── Large pitch zone (for pitching detail) ─────────────────────────────────
+// ── Large pitch zone (SVG scatter plot) ───────────────────────────────────
 function buildPitchZoneLarge(pitches, gamePk) {
-  // Build 3x3 zone with labeled cells and larger dots
-  const zones = Array(3).fill(null).map(()=>Array(3).fill(null).map(()=>[]));
-  const rowLabels = ['High','Mid','Low'];
-  const colLabels = ['In','Mid','Out'];
-
-  pitches.forEach(p => {
-    const x = p.pX, z = p.pZ;
-    if (x===null||z===null||x===undefined||z===undefined) return;
-    const col = x < -0.28 ? 0 : x > 0.28 ? 2 : 1;
-    const row = z > 2.83  ? 0 : z < 2.0  ? 2 : 1;
-    const desc = (p.desc||'').toLowerCase();
-    const isStrike = desc.includes('strike')||desc.includes('foul')||desc.includes('swinging');
-    const isHit    = desc.includes('play');
-    zones[row][col].push({ num: p.num, isStrike, isHit, type: p.type, speed: p.speed });
-  });
-
-  let html = `<div class="pitch-zone-large" id="zone-large-${gamePk}">`;
-  // Column headers
-  html += `<div class="zone-col-headers"><span></span>${colLabels.map(l=>`<span>${l}</span>`).join('')}</div>`;
-  for (let row=0;row<3;row++) {
-    html += `<div class="zone-large-row">`;
-    html += `<span class="zone-row-label">${rowLabels[row]}</span>`;
-    for (let col=0;col<3;col++) {
-      const isCenter = row===1&&col===1;
-      html += `<div class="zone-large-cell ${isCenter?'zone-center':''}">`;
-      zones[row][col].forEach(p => {
-        const cls = p.isHit?'hit':p.isStrike?'strike':'ball';
-        html += `<span class="zone-dot-lg ${cls}" id="zdot-${gamePk}-${p.num}" title="${p.type}${p.speed?' '+p.speed+'mph':''}">${p.num}</span>`;
-      });
-      html += `</div>`;
-    }
-    html += `</div>`;
-  }
-  html += `</div>`;
-  return html;
+  return buildPitchZoneTyped(pitches, gamePk, 'zdot');
 }
 
-function highlightZonePitch(gamePk, num) {
-  // Dim all, highlight the hovered one
-  document.querySelectorAll(`[id^="zdot-${gamePk}-"]`).forEach(el => {
-    el.classList.add('zone-dot-dim');
-  });
-  const target = document.getElementById(`zdot-${gamePk}-${num}`);
-  if (target) {
-    target.classList.remove('zone-dot-dim');
-    target.classList.add('zone-dot-highlight');
-  }
-}
-
-function clearZoneHighlight(gamePk) {
-  document.querySelectorAll(`[id^="zdot-${gamePk}-"]`).forEach(el => {
-    el.classList.remove('zone-dot-dim','zone-dot-highlight');
-  });
-}
+function highlightZonePitch(gamePk, idx) { highlightScatterDot('zdot', gamePk, idx, 4.5); }
+function clearZoneHighlight(gamePk)       { clearScatterHighlight('zdot', gamePk); }
 
 // ── Team Standings ─────────────────────────────────────────────────────────
 async function renderTeamStandings(container) {
@@ -1071,7 +1022,10 @@ async function renderTeamStandings(container) {
         standingsHtml += `
           <div class="standings-row ${isMyTeam?'my-team':''}">
             <span class="standings-rank">${idx+1}</span>
-            <span class="standings-team">${isMyTeam?`<strong>${rec.team?.name||''}</strong>`:rec.team?.name||''}</span>
+            <span class="standings-team">
+              <img class="standings-logo" src="https://www.mlbstatic.com/team-logos/${rec.team?.id}.svg" onerror="this.style.display='none'">
+              ${isMyTeam?`<strong>${rec.team?.name||''}</strong>`:rec.team?.name||''}
+            </span>
             <span class="standings-w">${rec.wins??'-'}</span>
             <span class="standings-l">${rec.losses??'-'}</span>
             <span>${rec.winningPercentage??'-'}</span>
