@@ -685,6 +685,12 @@ async function toggleGameAtBats(gamePk, rowEl, isHome) {
           </div>
           <div class="pitch-zone-wrap">
             <div class="zone-label">Strike Zone</div>
+            <div class="zone-size-legend">
+              <span class="zsl-item"><span class="zsl-dot big"></span><span>結果球</span></span>
+              <span class="zsl-item"><span class="zsl-dot small"></span><span>途中</span></span>
+              <span class="zsl-item"><span class="zsl-ring white"></span><span>Strike</span></span>
+              <span class="zsl-item"><span class="zsl-ring yellow"></span><span>In Play</span></span>
+            </div>
             ${buildPitchZoneTyped(pitches, abId, 'bzdot')}
           </div>
         </div>
@@ -917,20 +923,21 @@ async function toggleGamePitching(gamePk, rowEl) {
             <div class="zone-sticky">
               <div class="zone-title">投球コース / Zone</div>
               <div class="zone-filter-row">
-                <select class="zone-filter-sel" id="zone-filter-${gamePk}" onchange="applyZoneFilter('${gamePk}')">
-                  <option value="all">全投球</option>
-                  <option value="inning">イニング別</option>
-                  <option value="batter">打者別</option>
-                  <option value="result">結果別</option>
+                <select class="zone-filter-sel" id="zone-inning-${gamePk}" onchange="applyZoneFilter('${gamePk}','inning')">
+                  <option value="all">${currentLang==='ja'?'全打席':'All Inn.'}</option>
+                  ${[...new Set(allPitches.map(p=>p.inning).filter(Boolean))].sort((a,b)=>a-b).map(i=>`<option value="${i}">${i}回</option>`).join('')}
                 </select>
-                <select class="zone-filter-sel" id="zone-filter-val-${gamePk}" onchange="applyZoneFilter('${gamePk}')" style="display:none"></select>
+                <select class="zone-filter-sel" id="zone-batter-${gamePk}" onchange="applyZoneFilter('${gamePk}','batter')">
+                  <option value="all">${currentLang==='ja'?'全打者':'All Batters'}</option>
+                  ${[...new Set(allPitches.map(p=>p.batter).filter(Boolean))].map(b=>`<option value="${b}">${b}</option>`).join('')}
+                </select>
               </div>
               <div class="zone-type-legend" id="zone-legend-${gamePk}"></div>
               <div class="zone-size-legend">
-                <span class="zsl-item"><span class="zsl-dot big"></span>結果球</span>
-                <span class="zsl-item"><span class="zsl-dot small"></span>途中</span>
-                <span class="zsl-item"><span class="zsl-ring white"></span>Strike</span>
-                <span class="zsl-item"><span class="zsl-ring yellow"></span>In Play</span>
+                <span class="zsl-item"><span class="zsl-dot big"></span><span>結果球（打席の最後）</span></span>
+                <span class="zsl-item"><span class="zsl-dot small"></span><span>途中（ボール/ファウル等）</span></span>
+                <span class="zsl-item"><span class="zsl-ring white"></span><span>Strike</span></span>
+                <span class="zsl-item"><span class="zsl-ring yellow"></span><span>In Play</span></span>
               </div>
               <div id="zone-svg-${gamePk}">${buildPitchZoneLarge(allPitches, gamePk)}</div>
             </div>
@@ -1089,46 +1096,40 @@ function buildPitchZoneLarge(pitches, gamePk) {
 function highlightZonePitch(gamePk, idx) { highlightScatterDot('zdot', gamePk, idx, 4.5); }
 function clearZoneHighlight(gamePk)       { clearScatterHighlight('zdot', gamePk); }
 
-function applyZoneFilter(gamePk) {
-  const filterSel   = document.getElementById(`zone-filter-${gamePk}`);
-  const valSel      = document.getElementById(`zone-filter-val-${gamePk}`);
-  const zoneDiv     = document.getElementById(`zone-svg-${gamePk}`);
-  const legendDiv   = document.getElementById(`zone-legend-${gamePk}`);
-  if (!filterSel||!zoneDiv) return;
+function applyZoneFilter(gamePk, changed) {
+  const inningSel = document.getElementById(`zone-inning-${gamePk}`);
+  const batterSel = document.getElementById(`zone-batter-${gamePk}`);
+  const zoneDiv   = document.getElementById(`zone-svg-${gamePk}`);
+  const legendDiv = document.getElementById(`zone-legend-${gamePk}`);
+  if (!inningSel||!zoneDiv) return;
 
-  const filterType = filterSel.value;
   const allPitches = (window._pitchZoneData||{})[gamePk] || [];
+  const inningVal  = inningSel.value;
 
-  // Show/hide value selector and repopulate
-  if (filterType === 'all') {
-    valSel.style.display = 'none';
-    zoneDiv.innerHTML = buildPitchZoneLarge(allPitches, gamePk);
-  } else {
-    valSel.style.display = 'inline-block';
-    let options = [];
-    if (filterType === 'inning') {
-      options = [...new Set(allPitches.map(p=>p.inning).filter(Boolean))].sort((a,b)=>a-b);
-      valSel.innerHTML = options.map(v=>`<option value="${v}">${v}回</option>`).join('');
-    } else if (filterType === 'batter') {
-      options = [...new Set(allPitches.map(p=>p.batter).filter(Boolean))];
-      valSel.innerHTML = options.map(v=>`<option value="${v}">${v}</option>`).join('');
-    } else if (filterType === 'result') {
-      const results = [...new Set(allPitches.filter(p=>p.finalEvent).map(p=>p.finalEvent))];
-      valSel.innerHTML = results.map(v=>`<option value="${v}">${shortResult(v)}</option>`).join('');
-    }
-    const val = valSel.value;
-    let filtered = allPitches;
-    if (filterType==='inning')  filtered = allPitches.filter(p=>String(p.inning)===String(val));
-    if (filterType==='batter')  filtered = allPitches.filter(p=>p.batter===val);
-    if (filterType==='result')  filtered = allPitches.filter(p=>p.finalEvent===val);
-    zoneDiv.innerHTML = buildPitchZoneTyped(filtered, gamePk+'-f', 'zdot');
+  // When inning changes, repopulate batter list
+  if (changed === 'inning' || !batterSel.options.length) {
+    const pitchesForInning = inningVal === 'all'
+      ? allPitches
+      : allPitches.filter(p => String(p.inning) === String(inningVal));
+    const batters = ['all', ...new Set(pitchesForInning.map(p=>p.batter).filter(Boolean))];
+    batterSel.innerHTML = batters.map(b =>
+      `<option value="${b}">${b==='all'?(currentLang==='ja'?'全打者':'All Batters'):b}</option>`
+    ).join('');
   }
 
-  // Rebuild legend
+  const batterVal = batterSel.value;
+
+  // Filter pitches
+  let filtered = allPitches;
+  if (inningVal !== 'all') filtered = filtered.filter(p => String(p.inning) === String(inningVal));
+  if (batterVal !== 'all') filtered = filtered.filter(p => p.batter === batterVal);
+
+  zoneDiv.innerHTML = buildPitchZoneLarge(filtered, `${gamePk}-f`);
+
+  // Rebuild legend from filtered pitches
   if (legendDiv) {
-    const src = filterType==='all' ? allPitches : (window._pitchZoneData[gamePk]||[]);
     const typesSeen = {};
-    src.forEach(p => { if(p.type&&p.type!=='-') typesSeen[p.type]=pitchTypeColor(p.type); });
+    filtered.forEach(p => { if(p.type&&p.type!=='-') typesSeen[p.type]=pitchTypeColor(p.type); });
     legendDiv.innerHTML = Object.entries(typesSeen).map(([type,color])=>
       `<span class="zt-legend-item"><span class="zt-dot" style="background:${color}"></span>${type}</span>`
     ).join('');
@@ -1139,181 +1140,144 @@ function applyZoneFilter(gamePk) {
 async function renderTeamStandings(container) {
   container.innerHTML = `<div class="loading-spinner"></div>`;
   try {
-    const player = currentPlayer;
-    const teamId = player.teamId;
-
-    // Determine league (AL=103, NL=104) based on team
-    const alTeams = [108,111,114,117,118,133,136,139,141,142,145,147]; // LAA,BOS,CLE,HOU,KC,OAK,SEA,TB,TOR,MIN,CWS,NYY
+    const player   = currentPlayer;
+    const teamId   = player.teamId;
+    const alTeams  = [108,111,114,117,118,133,136,139,141,142,145,147];
     const leagueId = alTeams.includes(teamId) ? 103 : 104;
     const leagueName = leagueId===103 ? 'American League' : 'National League';
 
-    const [standingsRecords] = await Promise.all([
-      fetchStandings(leagueId),
-    ]);
-    const scheduleDates = await fetchTeamStandingsHistory(teamId);
+    const standingsRecords = await fetchStandings(leagueId);
 
-    console.log('[MLB v11c] standings divisions:', standingsRecords.map(d=>({
-      divisionName: d.division?.name,
-      divisionId: d.division?.id,
-      teams: d.teamRecords?.length
-    })));
-
-    // Build standings table - grouped by division
+    // Find my division
     let myDivision = null;
-    let standingsHtml = `<div class="team-standings-section"><div class="standings-league-title">${leagueName}</div>`;
+    standingsRecords.forEach(div => {
+      if (div.teamRecords?.some(r => r.team?.id === teamId)) myDivision = div;
+    });
+
+    // Division name map fallback
+    const divNameMap = {200:'AL West',201:'AL East',202:'AL Central',203:'NL West',204:'NL East',205:'NL Central'};
+
+    // Build 3 division tables side by side
+    let html = `
+      <div class="standings-page">
+        <div class="standings-league-title">${leagueName}</div>
+        <div class="standings-three-cols">
+    `;
 
     standingsRecords.forEach(division => {
-      // MLB API returns division info in multiple possible locations
-      const divName = division.division?.name 
-        || division.division?.nameShort
-        || division.divisionRecords?.[0]?.division?.name
-        || `Division ${division.division?.id || ''}`;
-      const hasMyTeam = division.teamRecords?.some(r => r.team?.id === teamId);
-      if (hasMyTeam) myDivision = division;
-
-      // Map division IDs to readable names as fallback
-      const divId = division.division?.id;
-      const divNameMap = {
-        200: 'AL West', 201: 'AL East', 202: 'AL Central',
-        203: 'NL West', 204: 'NL East', 205: 'NL Central',
-      };
-      const displayDivName = divName || divNameMap[divId] || `Division ${divId||''}`;
-
-      standingsHtml += `
+      const divId   = division.division?.id;
+      const divName = division.division?.name || divNameMap[divId] || `Div ${divId}`;
+      html += `
         <div class="standings-division">
-          <div class="standings-div-title">${displayDivName}</div>
+          <div class="standings-div-title">${divName}</div>
           <div class="standings-table">
             <div class="standings-header">
-              <span>順位</span><span>チーム</span><span>W</span><span>L</span><span>Pct</span><span>GB</span>
+              <span>#</span><span>Team</span><span>W</span><span>L</span><span>GB</span>
             </div>
       `;
       division.teamRecords?.forEach((rec, idx) => {
         const isMyTeam = rec.team?.id === teamId;
         const gb = idx===0 ? '-' : (rec.gamesBack||'-');
-        standingsHtml += `
+        html += `
           <div class="standings-row ${isMyTeam?'my-team':''}">
             <span class="standings-rank">${idx+1}</span>
             <span class="standings-team">
               <img class="standings-logo" src="https://www.mlbstatic.com/team-logos/${rec.team?.id}.svg" onerror="this.style.display='none'">
-              ${isMyTeam?`<strong>${rec.team?.name||''}</strong>`:rec.team?.name||''}
+              <span>${isMyTeam?`<strong>${rec.team?.name||''}</strong>`:rec.team?.name||''}</span>
             </span>
             <span class="standings-w">${rec.wins??'-'}</span>
             <span class="standings-l">${rec.losses??'-'}</span>
-            <span>${rec.winningPercentage??'-'}</span>
             <span>${gb}</span>
           </div>
         `;
       });
-      standingsHtml += `</div></div>`;
+      html += `</div></div>`;
     });
-    standingsHtml += `</div>`;
 
-    // Build division rank history from each team's schedule
-    const chartCanvasId = `team-rank-chart-${teamId}`;
-    let rankChartHtml = `
-      <div class="team-standings-section">
-        <div class="summary-title">地区順位推移 / Division Rank Trend</div>
-        <div class="chart-block" style="margin:0">
-          <div class="chart-wrap" style="height:240px"><canvas id="${chartCanvasId}"></canvas></div>
-        </div>
+    html += `</div>`; // standings-three-cols
+
+    // League win% trend chart (top 8 by win%)
+    const chartId = `league-winpct-${teamId}`;
+    html += `
+      <div class="summary-title" style="margin:16px 0 8px">リーグ勝率推移 Top 8 / League Win% Trend</div>
+      <div class="chart-block" style="margin:0 0 16px">
+        <div class="chart-wrap" style="height:260px"><canvas id="${chartId}"></canvas></div>
       </div>
-    `;
+    </div>`;
 
-    let html = standingsHtml + rankChartHtml;
     container.innerHTML = html;
 
-    // Build rank history: fetch schedule for each team in my division
+    // Build win% history for top 8 teams in league
     setTimeout(async () => {
       try {
-        if (!myDivision) return;
-        const divTeams = myDivision.teamRecords || [];
+        // Get all teams sorted by win%
+        const allTeams = standingsRecords.flatMap(div => div.teamRecords || []);
+        const top8 = [...allTeams]
+          .sort((a,b) => parseFloat(b.winningPercentage||0) - parseFloat(a.winningPercentage||0))
+          .slice(0, 8);
 
-        // For each team, build cumulative W/L history → derive rank per game date
-        const teamHistories = await Promise.all(divTeams.map(async rec => {
-          const tid = rec.team?.id;
+        const colors = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#a855f7','#06b6d4','#f97316','#84cc16'];
+
+        const datasets = await Promise.all(top8.map(async (rec, i) => {
+          const tid   = rec.team?.id;
+          const tname = rec.team?.name || '?';
           const dates = await fetchTeamStandingsHistory(tid);
           let w=0, l=0;
-          const history = [];
+          const data = [];
           dates.forEach(d => {
             d.games?.forEach(game => {
               if (game.status?.abstractGameState !== 'Final') return;
               const isHome = game.teams?.home?.team?.id === tid;
-              const myT = isHome ? game.teams?.home : game.teams?.away;
+              const myT    = isHome ? game.teams?.home : game.teams?.away;
               if (myT?.isWinner === undefined) return;
               if (myT.isWinner) w++; else l++;
-              history.push({ date: d.date, w, l, pct: w/(w+l||1) });
+              data.push({ x: d.date, y: w+l>0 ? parseFloat((w/(w+l)).toFixed(3)) : 0 });
             });
           });
-          return { teamId: tid, name: rec.team?.name||'?', history };
+          return {
+            label: tname,
+            data,
+            borderColor: colors[i],
+            backgroundColor: colors[i]+'22',
+            borderWidth: rec.team?.id === teamId ? 3 : 1.5,
+            pointRadius: rec.team?.id === teamId ? 4 : 2,
+            tension: 0, fill: false,
+            pointStyle: rec.team?.id === teamId ? 'circle' : 'circle',
+          };
         }));
 
-        // Collect all unique dates
-        const allDates = [...new Set(teamHistories.flatMap(th=>th.history.map(h=>h.date)))].sort();
-
-        // For each date, compute rank of each team
-        const rankDataByTeam = teamHistories.map(th => ({ name: th.name, isMyTeam: th.teamId===teamId, data: [] }));
-
-        allDates.forEach(date => {
-          // Get pct of each team up to this date
-          const pctsAtDate = teamHistories.map(th => {
-            const games = th.history.filter(h=>h.date<=date);
-            return games.length ? games[games.length-1].pct : 0;
-          });
-          // Sort descending → rank
-          const sorted = [...pctsAtDate].sort((a,b)=>b-a);
-          pctsAtDate.forEach((pct,i) => {
-            const rank = sorted.indexOf(pct)+1;
-            rankDataByTeam[i].data.push({ x: date, y: rank });
-          });
-        });
-
-        // Draw chart
-        destroyChart(chartCanvasId);
-        const ctx = document.getElementById(chartCanvasId)?.getContext('2d');
+        destroyChart(chartId);
+        const ctx = document.getElementById(chartId)?.getContext('2d');
         if (!ctx) return;
-
-        const colors = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#a855f7'];
-        chartInstances[chartCanvasId] = new Chart(ctx, {
+        chartInstances[chartId] = new Chart(ctx, {
           type: 'line',
-          data: {
-            datasets: rankDataByTeam.map((td, i) => ({
-              label: td.name,
-              data: td.data,
-              borderColor: colors[i % colors.length],
-              backgroundColor: colors[i % colors.length]+'22',
-              borderWidth: td.isMyTeam ? 3 : 1.5,
-              pointRadius: td.isMyTeam ? 4 : 2,
-              pointStyle: td.isMyTeam ? 'circle' : 'circle',
-              tension: 0,
-              fill: false,
-            }))
-          },
+          data: { datasets },
           options: {
             responsive: true, maintainAspectRatio: false,
             interaction: { mode:'index', intersect:false },
             plugins: {
-              legend: { display:true, position:'top', labels:{color:'#e0e6f0',font:{size:11},padding:10,usePointStyle:true} },
+              legend: { display:true, position:'top', labels:{color:'#e0e6f0',font:{size:11},padding:8,usePointStyle:true} },
               tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 }
             },
             scales: {
               x: { type:'time', time:{unit:'day',displayFormats:{day:'M/d'}}, ticks:{color:'#6a8aaa',font:{size:11},maxRotation:0}, grid:{color:'#1a2a3a'} },
               y: {
-                reverse: true, // 1位が上
-                min:1, max: divTeams.length,
-                ticks:{ color:'#6a8aaa', font:{size:12}, stepSize:1,
-                  callback: v => `${v}位` },
-                grid:{ color:'#1a2a3a' },
-                title:{ display:true, text:'順位 / Rank', color:'#6a8aaa' }
+                min:0.3, max:0.75,
+                ticks:{color:'#6a8aaa',font:{size:12},callback:v=>'.'+String(Math.round(v*1000)).padStart(3,'0')},
+                grid:{color:'#1a2a3a'},
+                title:{display:true,text:'Win %',color:'#6a8aaa'}
               }
             }
           }
         });
-      } catch(e) {
-        console.error('Division rank chart error:', e);
-      }
+      } catch(e) { console.error('League win% chart error:', e); }
     }, 100);
 
+    // Build division rank history chart (my division only)
+    // ... keeping existing rank trend removed since we now have win% trend
+
   } catch(e) {
+    console.error('renderTeamStandings error:', e);
     container.innerHTML = `<div class="error-msg">${t('error')}: ${e.message}</div>`;
   }
 }

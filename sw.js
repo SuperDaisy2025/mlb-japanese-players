@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mlb-jp-v13';
+const CACHE_NAME = 'mlb-jp-v14';
 const STATIC_ASSETS = ['/','/index.html','/src/app.js','/src/mlb-api.js','/src/charts.js','/src/i18n.js','/manifest.json'];
 
 self.addEventListener('install', e => {
