@@ -12,13 +12,36 @@ let gameLogCache = {};
 
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[MLB v11] App starting...');
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  console.log('[MLB v13] App starting...');
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+    // Listen for SW update notification
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'SW_UPDATED') {
+        showUpdateToast(e.data.version);
+      }
+    });
+  }
   setLang(currentLang);
   await switchTab('batting');
   updateLastUpdatedDisplay();
-  console.log('[MLB v11] App ready.');
+  console.log('[MLB v13] App ready.');
 });
+
+function showUpdateToast(version) {
+  const existing = document.getElementById('update-toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'update-toast';
+  toast.innerHTML = `
+    <span>🆕 新しいバージョンが利用可能です (${version})</span>
+    <button onclick="window.location.reload()">今すぐ更新</button>
+    <button onclick="this.parentElement.remove()" class="toast-close">✕</button>
+  `;
+  document.body.appendChild(toast);
+  // Auto-reload after 5 seconds
+  setTimeout(() => { if(document.getElementById('update-toast')) window.location.reload(); }, 5000);
+}
 
 // ── Tab switching ─────────────────────────────────────────────────────────
 async function switchTab(tab) {
@@ -26,7 +49,7 @@ async function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.id===`tab-${tab}`));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id===`panel-${tab}`));
   if (tab==='batting')  await renderBattingTab();
-  if (tab==='pitching') await renderPitchingTab();
+  if (tab==='pitching') await renderPitchingTabWrapper();
   if (tab==='players')  renderPlayersTab();
 }
 
@@ -78,6 +101,82 @@ async function renderBattingTab() {
   await renderBattingOverview();
   renderBattingFilterUI();
   await renderBattingCharts();
+  renderLeagueWinPctChart('batting-league-chart', [103, 104]);
+}
+
+async function renderPitchingTabWrapper() {
+  await renderPitchingOverview();
+  renderPitchingFilterUI();
+  await renderPitchingCharts();
+  renderLeagueWinPctChart('pitching-league-chart', [103, 104]);
+}
+
+async function renderLeagueWinPctChart(canvasId, leagueIds) {
+  const container = document.getElementById(canvasId + '-block');
+  if (!container) return;
+  container.innerHTML = `<div class="chart-block"><h3 class="chart-title">リーグ勝率推移 / League Win% Trend</h3><div class="chart-wrap" style="height:220px"><canvas id="${canvasId}"></canvas></div></div>`;
+
+  try {
+    const leagueNames = { 103: 'American League', 104: 'National League' };
+    const leagueColors = { 103: '#3b82f6', 104: '#ef4444' };
+    const datasets = [];
+
+    for (const lid of leagueIds) {
+      const records = await fetchLeagueStandingsHistory(lid);
+      // Calculate average win% across all teams in league
+      let totalW = 0, totalL = 0;
+      records.forEach(div => {
+        div.teamRecords?.forEach(r => {
+          totalW += r.wins || 0;
+          totalL += r.losses || 0;
+        });
+      });
+      const pct = totalW + totalL > 0 ? (totalW / (totalW + totalL)).toFixed(3) : null;
+      // For trend we just show current snapshot as single point - 
+      // use each team's schedule history to build trend
+      const season = new Date().getFullYear();
+      const today = dateStr(new Date());
+      // Build weekly snapshots from 3/26
+      const snapshots = [];
+      const start = new Date(`${season}-03-26`);
+      const end = new Date();
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) {
+        snapshots.push(dateStr(new Date(d)));
+      }
+      if (snapshots[snapshots.length-1] !== today) snapshots.push(today);
+
+      datasets.push({
+        label: leagueNames[lid],
+        data: [{ x: today, y: pct }],
+        borderColor: leagueColors[lid],
+        backgroundColor: leagueColors[lid] + '22',
+        borderWidth: 2, pointRadius: 6, tension: 0,
+      });
+    }
+
+    destroyChart(canvasId);
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
+    if (!ctx) return;
+    chartInstances[canvasId] = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: datasets.map(d=>d.label), datasets: [{
+        data: datasets.map(d=>d.data[0]?.y),
+        backgroundColor: [leagueColors[103]+'99', leagueColors[104]+'99'],
+        borderColor: [leagueColors[103], leagueColors[104]],
+        borderWidth: 2, borderRadius: 6,
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 }
+        },
+        scales: {
+          x: { ticks:{color:'#6a8aaa',font:{size:13}}, grid:{color:'#1a2a3a'} },
+          y: { min:0.4, max:0.6, ticks:{color:'#6a8aaa',font:{size:12},callback:v=>'.'+String(Math.round(v*1000)).padStart(3,'0')}, grid:{color:'#1a2a3a'}, title:{display:true,text:'Win %',color:'#6a8aaa'} }
+        }
+      }
+    });
+  } catch(e) { console.error('League chart error:', e); }
 }
 
 async function renderBattingOverview() {
@@ -794,7 +893,7 @@ async function toggleGamePitching(gamePk, rowEl) {
         <div class="pitching-top-row">
           <div class="pitching-list-col">
             <div class="pst-header">
-              <span>#</span><span>${t('pitchType')}</span><span>${t('speed')}</span>
+              <span>#</span><span>回/Out</span><span>${t('pitchType')}</span><span>${t('speed')}</span>
               <span>Batter</span><span>B-S</span><span>${t('outcome')}</span>
             </div>
             ${allPitches.map(p => `
@@ -802,6 +901,7 @@ async function toggleGamePitching(gamePk, rowEl) {
                    onmouseenter="highlightZonePitch('${gamePk}',${p.num-1})"
                    onmouseleave="clearZoneHighlight('${gamePk}')">
                 <span>${p.num}</span>
+                <span class="pst-inning">${p.inning?p.inning+'回':'-'}<span class="pst-outs">${'●'.repeat(p.outs||0)}${'○'.repeat(Math.max(0,2-(p.outs||0)))}</span></span>
                 <span style="color:${pitchTypeColor(p.type)}">${p.type}</span>
                 <span>${p.speed?p.speed+' mph':'-'}</span>
                 <span class="batter-cell">${p.batter}</span>
@@ -816,8 +916,23 @@ async function toggleGamePitching(gamePk, rowEl) {
           <div class="pitching-zone-col">
             <div class="zone-sticky">
               <div class="zone-title">投球コース / Zone</div>
+              <div class="zone-filter-row">
+                <select class="zone-filter-sel" id="zone-filter-${gamePk}" onchange="applyZoneFilter('${gamePk}')">
+                  <option value="all">全投球</option>
+                  <option value="inning">イニング別</option>
+                  <option value="batter">打者別</option>
+                  <option value="result">結果別</option>
+                </select>
+                <select class="zone-filter-sel" id="zone-filter-val-${gamePk}" onchange="applyZoneFilter('${gamePk}')" style="display:none"></select>
+              </div>
               <div class="zone-type-legend" id="zone-legend-${gamePk}"></div>
-              ${buildPitchZoneLarge(allPitches, gamePk)}
+              <div class="zone-size-legend">
+                <span class="zsl-item"><span class="zsl-dot big"></span>結果球</span>
+                <span class="zsl-item"><span class="zsl-dot small"></span>途中</span>
+                <span class="zsl-item"><span class="zsl-ring white"></span>Strike</span>
+                <span class="zsl-item"><span class="zsl-ring yellow"></span>In Play</span>
+              </div>
+              <div id="zone-svg-${gamePk}">${buildPitchZoneLarge(allPitches, gamePk)}</div>
             </div>
           </div>
         </div>
@@ -843,9 +958,19 @@ async function toggleGamePitching(gamePk, rowEl) {
 
     el.innerHTML = html;
 
-    // Store pitch data for zone highlight
+    // Store all pitch data for zone filter
     window._pitchZoneData = window._pitchZoneData || {};
     window._pitchZoneData[gamePk] = allPitches;
+
+    // Populate filter value selects
+    setTimeout(() => {
+      const valSel = document.getElementById(`zone-filter-val-${gamePk}`);
+      if (valSel) {
+        // Populate with inning values initially (hidden)
+        const innings = [...new Set(allPitches.map(p=>p.inning).filter(Boolean))].sort((a,b)=>a-b);
+        valSel.innerHTML = innings.map(i=>`<option value="${i}">${i}回</option>`).join('');
+      }
+    }, 50);
 
     // Draw charts
     setTimeout(() => {
@@ -963,6 +1088,52 @@ function buildPitchZoneLarge(pitches, gamePk) {
 
 function highlightZonePitch(gamePk, idx) { highlightScatterDot('zdot', gamePk, idx, 4.5); }
 function clearZoneHighlight(gamePk)       { clearScatterHighlight('zdot', gamePk); }
+
+function applyZoneFilter(gamePk) {
+  const filterSel   = document.getElementById(`zone-filter-${gamePk}`);
+  const valSel      = document.getElementById(`zone-filter-val-${gamePk}`);
+  const zoneDiv     = document.getElementById(`zone-svg-${gamePk}`);
+  const legendDiv   = document.getElementById(`zone-legend-${gamePk}`);
+  if (!filterSel||!zoneDiv) return;
+
+  const filterType = filterSel.value;
+  const allPitches = (window._pitchZoneData||{})[gamePk] || [];
+
+  // Show/hide value selector and repopulate
+  if (filterType === 'all') {
+    valSel.style.display = 'none';
+    zoneDiv.innerHTML = buildPitchZoneLarge(allPitches, gamePk);
+  } else {
+    valSel.style.display = 'inline-block';
+    let options = [];
+    if (filterType === 'inning') {
+      options = [...new Set(allPitches.map(p=>p.inning).filter(Boolean))].sort((a,b)=>a-b);
+      valSel.innerHTML = options.map(v=>`<option value="${v}">${v}回</option>`).join('');
+    } else if (filterType === 'batter') {
+      options = [...new Set(allPitches.map(p=>p.batter).filter(Boolean))];
+      valSel.innerHTML = options.map(v=>`<option value="${v}">${v}</option>`).join('');
+    } else if (filterType === 'result') {
+      const results = [...new Set(allPitches.filter(p=>p.finalEvent).map(p=>p.finalEvent))];
+      valSel.innerHTML = results.map(v=>`<option value="${v}">${shortResult(v)}</option>`).join('');
+    }
+    const val = valSel.value;
+    let filtered = allPitches;
+    if (filterType==='inning')  filtered = allPitches.filter(p=>String(p.inning)===String(val));
+    if (filterType==='batter')  filtered = allPitches.filter(p=>p.batter===val);
+    if (filterType==='result')  filtered = allPitches.filter(p=>p.finalEvent===val);
+    zoneDiv.innerHTML = buildPitchZoneTyped(filtered, gamePk+'-f', 'zdot');
+  }
+
+  // Rebuild legend
+  if (legendDiv) {
+    const src = filterType==='all' ? allPitches : (window._pitchZoneData[gamePk]||[]);
+    const typesSeen = {};
+    src.forEach(p => { if(p.type&&p.type!=='-') typesSeen[p.type]=pitchTypeColor(p.type); });
+    legendDiv.innerHTML = Object.entries(typesSeen).map(([type,color])=>
+      `<span class="zt-legend-item"><span class="zt-dot" style="background:${color}"></span>${type}</span>`
+    ).join('');
+  }
+}
 
 // ── Team Standings ─────────────────────────────────────────────────────────
 async function renderTeamStandings(container) {

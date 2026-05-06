@@ -17,6 +17,7 @@ const JAPANESE_PLAYERS = [
   { id: 673540, nameEn: 'Kodai Senga',            nameJa: '千賀滉大',         team: 'NYM', teamId: 121, pos: ['SP'],      number: 34, isBatter: false, isPitcher: true  },
   { id: 684007, nameEn: 'Shota Imanaga',          nameJa: '今永昇太',         team: 'CHC', teamId: 112, pos: ['SP'],      number: 18, isBatter: false, isPitcher: true  },
   { id: 669022, nameEn: 'Yuki Matsui',            nameJa: '松井裕樹',         team: 'SD',  teamId: 135, pos: ['RP'],      number: 73, isBatter: false, isPitcher: true  },
+  { id: 608372, nameEn: 'Tomoyuki Sugano',        nameJa: '菅野智之',         team: 'COL', teamId: 115, pos: ['SP'],      number: 11, isBatter: false, isPitcher: true  },
 ];
 
 const BATTERS  = JAPANESE_PLAYERS.filter(p => p.isBatter);
@@ -28,11 +29,11 @@ const DEFAULT_PITCHER_IDS = [660271, 808967, 808963]; // 大谷, 山本, 佐々�
 const TEAM_COLORS = {
   LAD:'#005A9C', CHC:'#0E3386', BOS:'#BD3039',
   CWS:'#27251F', TOR:'#134A8E', SD:'#2F241D',
-  LAA:'#BA0021', NYM:'#002D72',
+  LAA:'#BA0021', NYM:'#002D72', COL:'#33006F',
 };
 
 function teamLogoUrl(teamAbbr) {
-  const ids = { LAD:119,CHC:112,BOS:111,CWS:145,TOR:141,SD:135,LAA:108,NYM:121 };
+  const ids = { LAD:119,CHC:112,BOS:111,CWS:145,TOR:141,SD:135,LAA:108,NYM:121,COL:115 };
   return ids[teamAbbr] ? `https://www.mlbstatic.com/team-logos/${ids[teamAbbr]}.svg` : '';
 }
 
@@ -81,7 +82,14 @@ async function fetchPitchData(gamePk, pitcherId) {
   return (data.allPlays || []).filter(p => p.matchup?.pitcher?.id === pitcherId);
 }
 
-// ── Standings ──────────────────────────────────────────────────────────────
+// ── League win% history ────────────────────────────────────────────────────
+async function fetchLeagueStandingsHistory(leagueId) {
+  // Fetch current standings and derive from team records
+  const season = new Date().getFullYear();
+  const res = await fetch(`${MLB_API}/standings?leagueId=${leagueId}&season=${season}&standingsTypes=regularSeason`);
+  const data = await res.json();
+  return data.records || [];
+}
 async function fetchStandings(leagueId) {
   const season = new Date().getFullYear();
   const res = await fetch(`${MLB_API}/standings?leagueId=${leagueId}&season=${season}&standingsTypes=regularSeason`);

@@ -289,7 +289,28 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
 .sr-lbl{display:flex;flex-direction:column}
 .sr-ja{font-size:9px;color:var(--txt3);font-weight:400;font-family:'Noto Sans JP',sans-serif;line-height:1.2;margin-top:1px}
 
-/* ── Responsive: mobile ── */
+/* ── Update toast ── */
+#update-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg4);border:1px solid var(--teal);border-radius:var(--rlg);padding:12px 16px;display:flex;align-items:center;gap:10px;z-index:999;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+#update-toast button{padding:5px 12px;background:var(--teal);border:none;border-radius:var(--r);color:#000;font-weight:700;font-size:12px;cursor:pointer}
+#update-toast .toast-close{background:none;border:1px solid var(--border2);color:var(--txt2);padding:4px 8px}
+
+/* ── Zone filter ── */
+.zone-filter-row{display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap}
+.zone-filter-sel{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);color:var(--txt);font-size:11px;padding:3px 6px;cursor:pointer;max-width:120px}
+.zone-size-legend{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;font-size:9px;color:var(--txt2)}
+.zsl-item{display:flex;align-items:center;gap:3px}
+.zsl-dot{border-radius:50%;display:inline-block;background:var(--txt2)}
+.zsl-dot.big{width:10px;height:10px}
+.zsl-dot.small{width:7px;height:7px}
+.zsl-ring{width:9px;height:9px;border-radius:50%;border:2px solid;display:inline-block;background:transparent}
+.zsl-ring.white{border-color:rgba(255,255,255,.9)}
+.zsl-ring.yellow{border-color:rgba(255,220,50,.9)}
+
+/* ── Pitching list inning/outs column ── */
+.pst-header{display:grid;grid-template-columns:32px 56px 1fr 75px 1fr 40px 1fr}
+.pst-row{display:grid;grid-template-columns:32px 56px 1fr 75px 1fr 40px 1fr}
+.pst-inning{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;display:flex;flex-direction:column;gap:1px}
+.pst-outs{font-size:9px;letter-spacing:1px;color:var(--txt3)}
 @media(max-width:640px){
   .pitching-top-row{flex-direction:column}
   .pitching-list-col{max-height:280px;border-right:none;border-bottom:1px solid var(--border);width:100%}
@@ -355,7 +376,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
       <div class="logo-box">MLB</div>
       <div>
         <div class="app-title-text" data-i18n="appTitle">MLB日本人選手</div>
-        <div class="app-version">v12</div>
+        <div class="app-version">v13</div>
       </div>
     </div>
     <div class="header-right">
@@ -386,6 +407,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
     <div id="batting-filter"></div>
     <div class="batting-charts-section" style="padding-top:12px">
       <div id="batting-charts"></div>
+      <div id="batting-league-chart-block" style="padding:0 14px 14px"></div>
     </div>
   </div>
 
@@ -400,6 +422,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;min-h
     <div id="pitching-filter"></div>
     <div class="pitching-charts-section" style="padding-top:12px">
       <div id="pitching-charts"></div>
+      <div id="pitching-league-chart-block" style="padding:0 14px 14px"></div>
     </div>
   </div>
 
