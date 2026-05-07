@@ -50,7 +50,10 @@ async function switchTab(tab) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id===`panel-${tab}`));
   if (tab==='batting')  await renderBattingTab();
   if (tab==='pitching') await renderPitchingTabWrapper();
-  if (tab==='players')  renderPlayersTab();
+  if (tab==='players') {
+    currentPlayer = null; // always reset to player list
+    renderPlayersTab();
+  }
 }
 
 async function switchPeriod(period) {
@@ -101,82 +104,12 @@ async function renderBattingTab() {
   await renderBattingOverview();
   renderBattingFilterUI();
   await renderBattingCharts();
-  renderLeagueWinPctChart('batting-league-chart', [103, 104]);
 }
 
 async function renderPitchingTabWrapper() {
   await renderPitchingOverview();
   renderPitchingFilterUI();
   await renderPitchingCharts();
-  renderLeagueWinPctChart('pitching-league-chart', [103, 104]);
-}
-
-async function renderLeagueWinPctChart(canvasId, leagueIds) {
-  const container = document.getElementById(canvasId + '-block');
-  if (!container) return;
-  container.innerHTML = `<div class="chart-block"><h3 class="chart-title">リーグ勝率推移 / League Win% Trend</h3><div class="chart-wrap" style="height:220px"><canvas id="${canvasId}"></canvas></div></div>`;
-
-  try {
-    const leagueNames = { 103: 'American League', 104: 'National League' };
-    const leagueColors = { 103: '#3b82f6', 104: '#ef4444' };
-    const datasets = [];
-
-    for (const lid of leagueIds) {
-      const records = await fetchLeagueStandingsHistory(lid);
-      // Calculate average win% across all teams in league
-      let totalW = 0, totalL = 0;
-      records.forEach(div => {
-        div.teamRecords?.forEach(r => {
-          totalW += r.wins || 0;
-          totalL += r.losses || 0;
-        });
-      });
-      const pct = totalW + totalL > 0 ? (totalW / (totalW + totalL)).toFixed(3) : null;
-      // For trend we just show current snapshot as single point - 
-      // use each team's schedule history to build trend
-      const season = new Date().getFullYear();
-      const today = dateStr(new Date());
-      // Build weekly snapshots from 3/26
-      const snapshots = [];
-      const start = new Date(`${season}-03-26`);
-      const end = new Date();
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) {
-        snapshots.push(dateStr(new Date(d)));
-      }
-      if (snapshots[snapshots.length-1] !== today) snapshots.push(today);
-
-      datasets.push({
-        label: leagueNames[lid],
-        data: [{ x: today, y: pct }],
-        borderColor: leagueColors[lid],
-        backgroundColor: leagueColors[lid] + '22',
-        borderWidth: 2, pointRadius: 6, tension: 0,
-      });
-    }
-
-    destroyChart(canvasId);
-    const ctx = document.getElementById(canvasId)?.getContext('2d');
-    if (!ctx) return;
-    chartInstances[canvasId] = new Chart(ctx, {
-      type: 'bar',
-      data: { labels: datasets.map(d=>d.label), datasets: [{
-        data: datasets.map(d=>d.data[0]?.y),
-        backgroundColor: [leagueColors[103]+'99', leagueColors[104]+'99'],
-        borderColor: [leagueColors[103], leagueColors[104]],
-        borderWidth: 2, borderRadius: 6,
-      }]},
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false },
-          tooltip: { backgroundColor:'#1a2035', titleColor:'#a0b4cc', bodyColor:'#e0e6f0', borderColor:'#2a3a55', borderWidth:1 }
-        },
-        scales: {
-          x: { ticks:{color:'#6a8aaa',font:{size:13}}, grid:{color:'#1a2a3a'} },
-          y: { min:0.4, max:0.6, ticks:{color:'#6a8aaa',font:{size:12},callback:v=>'.'+String(Math.round(v*1000)).padStart(3,'0')}, grid:{color:'#1a2a3a'}, title:{display:true,text:'Win %',color:'#6a8aaa'} }
-        }
-      }
-    });
-  } catch(e) { console.error('League chart error:', e); }
 }
 
 async function renderBattingOverview() {
@@ -479,25 +412,6 @@ async function renderPlayerSummary(container) {
         </div>`;
     }
 
-    html += `</div>`;
-
-    // Statcast - no button, use top-right button
-    const sc = await loadStatcastData(currentPlayer.id, currentPlayer.isPitcher?'pitcher':'batter');
-    html += `<div class="statcast-section">
-      <div class="summary-title">Statcast <span class="badge-sc">Advanced</span></div>`;
-    if (sc) {
-      html += `<div class="summary-grid-stats">
-        ${sc.exit_velocity?sr('Exit Velo','打球速度',sc.exit_velocity+' mph'):''}
-        ${sc.launch_angle?sr('Launch Angle','打球角度',sc.launch_angle+'°'):''}
-        ${sc.hard_hit_pct?sr('Hard Hit%','強打率',sc.hard_hit_pct+'%'):''}
-        ${sc.xba?sr('xBA','期待打率',sc.xba):''}
-        ${sc.xslg?sr('xSLG','期待長打率',sc.xslg):''}
-        ${sc.whiff_rate?sr('Whiff%','空振率',sc.whiff_rate+'%'):''}
-        ${sc.zone_pct?sr('Zone%','ゾーン率',sc.zone_pct+'%'):''}
-      </div>`;
-    } else {
-      html += `<p class="statcast-note">${currentLang==='ja'?'右上の📡Statcastボタンでデータを更新できます。':'Use the 📡 Statcast button (top right) to fetch data.'}</p>`;
-    }
     html += `</div>`;
 
     container.innerHTML = html;
@@ -897,13 +811,14 @@ async function toggleGamePitching(gamePk, rowEl) {
 
         <!-- Top: list (left) + zone (right) -->
         <div class="pitching-top-row">
-          <div class="pitching-list-col">
+          <div class="pitching-list-col" id="pitching-list-${gamePk}">
             <div class="pst-header">
               <span>#</span><span>回/Out</span><span>${t('pitchType')}</span><span>${t('speed')}</span>
               <span>Batter</span><span>B-S</span><span>${t('outcome')}</span>
             </div>
             ${allPitches.map(p => `
               <div class="pst-row ${p.isFinal?'final-pitch':''}"
+                   data-pitch-num="${p.num}"
                    onmouseenter="highlightZonePitch('${gamePk}',${p.num-1})"
                    onmouseleave="clearZoneHighlight('${gamePk}')">
                 <span>${p.num}</span>
@@ -1119,14 +1034,25 @@ function applyZoneFilter(gamePk, changed) {
 
   const batterVal = batterSel.value;
 
-  // Filter pitches
+  // Build set of matching pitch nums for fast lookup
   let filtered = allPitches;
   if (inningVal !== 'all') filtered = filtered.filter(p => String(p.inning) === String(inningVal));
   if (batterVal !== 'all') filtered = filtered.filter(p => p.batter === batterVal);
+  const matchNums = new Set(filtered.map(p => p.num));
 
+  // Filter pitch list rows (hide non-matching)
+  const listEl = document.getElementById(`pitching-list-${gamePk}`);
+  if (listEl) {
+    listEl.querySelectorAll('.pst-row').forEach(row => {
+      const num = parseInt(row.dataset.pitchNum);
+      row.style.display = matchNums.has(num) ? '' : 'none';
+    });
+  }
+
+  // Update zone SVG
   zoneDiv.innerHTML = buildPitchZoneLarge(filtered, `${gamePk}-f`);
 
-  // Rebuild legend from filtered pitches
+  // Rebuild legend
   if (legendDiv) {
     const typesSeen = {};
     filtered.forEach(p => { if(p.type&&p.type!=='-') typesSeen[p.type]=pitchTypeColor(p.type); });
